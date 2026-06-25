@@ -142,6 +142,10 @@ export const ROLES = {
 // Le Voleur nécessite toujours +2 cartes dans le deck
 
 export const ROLE_COMPOSITIONS = {
+  // ── Modes test ──
+  2:  { villager: 1, werewolf: 1 },
+  3:  { villager: 1, werewolf: 1, seer: 1 },
+  // ── Parties normales ──
   4:  { villager: 1, werewolf: 1, seer: 1, witch: 1 },
   5:  { villager: 2, werewolf: 1, seer: 1, witch: 1 },
   6:  { villager: 2, werewolf: 1, seer: 1, witch: 1, hunter: 1 },

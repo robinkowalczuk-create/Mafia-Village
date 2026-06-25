@@ -120,7 +120,7 @@ export default function App() {
   const renderPhase = () => {
     switch (phase) {
       case PHASES.LOBBY:
-        return <LobbyScreen game={game} currentPlayer={currentPlayer} />
+        return <LobbyScreen game={game} currentPlayer={currentPlayer} onPlayAgain={handlePlayAgain} />
 
       case PHASES.ROLE_REVEAL:
         return <RoleRevealScreen game={game} currentPlayer={currentPlayer} />
