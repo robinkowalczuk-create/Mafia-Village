@@ -4,6 +4,7 @@ import { usePlayers } from './hooks/usePlayers'
 import { PHASES } from './lib/constants'
 import { getOrCreatePlayerId, clearPlayerId } from './lib/gameUtils'
 import { sounds } from './lib/sounds'
+import { narrator } from './lib/narrator'
 import { supabase } from './lib/supabase'
 
 import { HomeScreen } from './components/screens/HomeScreen'
@@ -63,9 +64,9 @@ export default function App() {
       if (overlayPhases.includes(phase) && prevPhase !== null) {
         setOverlayPhase(phase)
         setShowOverlay(true)
-        if (phase === PHASES.NIGHT) sounds.nightFall()
-        else if (phase === PHASES.VOTE) sounds.voteStart()
-        else sounds.phaseTransition()
+        if (phase === PHASES.NIGHT) { /* narrator runs inside NightScreen */ }
+        else if (phase === PHASES.VOTE) { sounds.voteStart(); narrator.voteCall() }
+        else { sounds.phaseTransition(); if (phase === PHASES.DAY) narrator.dawn() }
       }
       setPrevPhase(phase)
     }
