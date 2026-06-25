@@ -1,38 +1,39 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { getOrCreateChannel, removeChannel } from '../lib/realtimeManager'
 
 export function useVotes(gameId, phaseNumber) {
   const [votes, setVotes] = useState([])
   const [loading, setLoading] = useState(true)
-  const subscribedRef = useRef(false)
+  const mountedRef = useRef(false)
+  const phaseRef = useRef(phaseNumber)
+  phaseRef.current = phaseNumber
 
-  const doFetch = (gid, phase) => {
+  const fetchVotes = (gid, phase) =>
     supabase
       .from('mv_votes')
       .select('*')
       .eq('game_id', gid)
       .eq('phase_number', phase)
       .then(({ data }) => { if (data) setVotes(data); setLoading(false) })
-  }
 
   useEffect(() => {
-    if (!gameId || phaseNumber == null || subscribedRef.current) return
-    subscribedRef.current = true
+    if (!gameId || phaseNumber == null || mountedRef.current) return
+    mountedRef.current = true
 
-    doFetch(gameId, phaseNumber)
+    fetchVotes(gameId, phaseNumber)
 
-    const channel = supabase
-      .channel(`votes_${gameId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'mv_votes', filter: `game_id=eq.${gameId}` },
-        () => doFetch(gameId, phaseNumber)
-      )
-      .subscribe()
+    const channelKey = `votes_${gameId}`
+    getOrCreateChannel(
+      channelKey,
+      'mv_votes',
+      `game_id=eq.${gameId}`,
+      () => fetchVotes(gameId, phaseRef.current)
+    )
 
     return () => {
-      subscribedRef.current = false
-      supabase.removeChannel(channel)
+      mountedRef.current = false
+      removeChannel(channelKey)
     }
   }, [gameId, phaseNumber])
 
