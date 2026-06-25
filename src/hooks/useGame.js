@@ -1,20 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { getOrCreateChannel, removeChannel } from '../lib/realtimeManager'
 
 export function useGame(gameCode) {
   const [game, setGame] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const gameCodeRef = useRef(null)
   const gameRef = useRef(null)
-  const mountedRef = useRef(false)
 
   useEffect(() => {
-    if (!gameCode || mountedRef.current) return
-    mountedRef.current = true
+    if (!gameCode) return
+    if (gameCodeRef.current === gameCode) return
+    gameCodeRef.current = gameCode
 
     const upper = gameCode.toUpperCase()
-    const channelKey = `game_${upper}`
 
     supabase
       .from('mv_games')
@@ -27,21 +26,17 @@ export function useGame(gameCode) {
         setLoading(false)
       })
 
-    getOrCreateChannel(
-      channelKey,
-      'mv_games',
-      `code=eq.${upper}`,
-      (payload) => {
-        if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-          setGame(payload.new)
-          gameRef.current = payload.new
-        }
-      }
-    )
+    const channel = supabase
+      .channel(`mv_games_${upper}`)
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'mv_games', filter: `code=eq.${upper}` },
+        (payload) => { setGame(payload.new); gameRef.current = payload.new }
+      )
+      .subscribe()
 
     return () => {
-      mountedRef.current = false
-      removeChannel(channelKey)
+      gameCodeRef.current = null
+      supabase.removeChannel(channel)
     }
   }, [gameCode])
 
@@ -49,11 +44,7 @@ export function useGame(gameCode) {
     const id = gameRef.current?.id
     if (!id) return { error: 'No game' }
     const { data, error: err } = await supabase
-      .from('mv_games')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single()
+      .from('mv_games').update(updates).eq('id', id).select().single()
     if (!err) { setGame(data); gameRef.current = data }
     return { data, error: err }
   }, [])

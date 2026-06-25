@@ -1,37 +1,38 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { getOrCreateChannel, removeChannel } from '../lib/realtimeManager'
 
 export function usePlayers(gameId) {
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(true)
-  const mountedRef = useRef(false)
-
-  const fetchPlayers = (gid) =>
-    supabase
-      .from('mv_players')
-      .select('*')
-      .eq('game_id', gid)
-      .order('joined_at', { ascending: true })
-      .then(({ data }) => { if (data) setPlayers(data); setLoading(false) })
+  const gameIdRef = useRef(null)
 
   useEffect(() => {
-    if (!gameId || mountedRef.current) return
-    mountedRef.current = true
+    if (!gameId) return
+    // Si même gameId, pas besoin de re-souscrire
+    if (gameIdRef.current === gameId) return
+    gameIdRef.current = gameId
 
-    fetchPlayers(gameId)
+    const fetch = () =>
+      supabase
+        .from('mv_players')
+        .select('*')
+        .eq('game_id', gameId)
+        .order('joined_at', { ascending: true })
+        .then(({ data }) => { if (data) { setPlayers(data); setLoading(false) } })
 
-    const channelKey = `players_${gameId}`
-    getOrCreateChannel(
-      channelKey,
-      'mv_players',
-      `game_id=eq.${gameId}`,
-      () => fetchPlayers(gameId)
-    )
+    fetch()
+
+    const channel = supabase
+      .channel(`mv_players_${gameId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'mv_players', filter: `game_id=eq.${gameId}` },
+        fetch
+      )
+      .subscribe()
 
     return () => {
-      mountedRef.current = false
-      removeChannel(channelKey)
+      gameIdRef.current = null
+      supabase.removeChannel(channel)
     }
   }, [gameId])
 

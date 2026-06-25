@@ -1,54 +1,47 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { getOrCreateChannel, removeChannel } from '../lib/realtimeManager'
 
 export function useVotes(gameId, phaseNumber) {
   const [votes, setVotes] = useState([])
   const [loading, setLoading] = useState(true)
-  const mountedRef = useRef(false)
   const phaseRef = useRef(phaseNumber)
   phaseRef.current = phaseNumber
-
-  const fetchVotes = (gid, phase) =>
-    supabase
-      .from('mv_votes')
-      .select('*')
-      .eq('game_id', gid)
-      .eq('phase_number', phase)
-      .then(({ data }) => { if (data) setVotes(data); setLoading(false) })
+  const keyRef = useRef(null)
 
   useEffect(() => {
-    if (!gameId || phaseNumber == null || mountedRef.current) return
-    mountedRef.current = true
+    if (!gameId || phaseNumber == null) return
+    const key = `${gameId}_${phaseNumber}`
+    if (keyRef.current === key) return
+    keyRef.current = key
 
-    fetchVotes(gameId, phaseNumber)
+    const fetch = () =>
+      supabase
+        .from('mv_votes')
+        .select('*')
+        .eq('game_id', gameId)
+        .eq('phase_number', phaseRef.current)
+        .then(({ data }) => { if (data) { setVotes(data); setLoading(false) } })
 
-    const channelKey = `votes_${gameId}`
-    getOrCreateChannel(
-      channelKey,
-      'mv_votes',
-      `game_id=eq.${gameId}`,
-      () => fetchVotes(gameId, phaseRef.current)
-    )
+    fetch()
+
+    const channel = supabase
+      .channel(`mv_votes_${gameId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'mv_votes', filter: `game_id=eq.${gameId}` },
+        fetch
+      )
+      .subscribe()
 
     return () => {
-      mountedRef.current = false
-      removeChannel(channelKey)
+      keyRef.current = null
+      supabase.removeChannel(channel)
     }
   }, [gameId, phaseNumber])
 
   const castVote = useCallback(async (voterId, targetId) => {
-    const { data, error } = await supabase
-      .from('mv_votes')
-      .upsert({
-        game_id: gameId,
-        voter_id: voterId,
-        target_id: targetId,
-        phase_number: phaseNumber,
-      }, { onConflict: 'game_id,voter_id,phase_number' })
-      .select()
-      .single()
-    return { data, error }
+    return supabase.from('mv_votes').upsert({
+      game_id: gameId, voter_id: voterId, target_id: targetId, phase_number: phaseNumber,
+    }, { onConflict: 'game_id,voter_id,phase_number' }).select().single()
   }, [gameId, phaseNumber])
 
   return { votes, loading, castVote }
