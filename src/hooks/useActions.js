@@ -4,45 +4,35 @@ import { supabase } from '../lib/supabase'
 export function useActions(gameId, phaseNumber) {
   const [actions, setActions] = useState([])
   const [loading, setLoading] = useState(true)
-  const channelRef = useRef(null)
+  const subscribedRef = useRef(false)
 
-  const fetchActions = useCallback(async () => {
-    if (!gameId || phaseNumber == null) return
-    const { data } = await supabase
+  const doFetch = (gid, phase) => {
+    supabase
       .from('mv_actions')
       .select('*')
-      .eq('game_id', gameId)
-      .eq('phase_number', phaseNumber)
-
-    if (data) setActions(data)
-    setLoading(false)
-  }, [gameId, phaseNumber])
+      .eq('game_id', gid)
+      .eq('phase_number', phase)
+      .then(({ data }) => { if (data) setActions(data); setLoading(false) })
+  }
 
   useEffect(() => {
-    if (!gameId) return
-    fetchActions()
+    if (!gameId || phaseNumber == null || subscribedRef.current) return
+    subscribedRef.current = true
 
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current)
-      channelRef.current = null
-    }
+    doFetch(gameId, phaseNumber)
 
     const channel = supabase
-      .channel(`actions:${gameId}:${phaseNumber}:${Date.now()}`)
+      .channel(`actions_${gameId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'mv_actions', filter: `game_id=eq.${gameId}` },
-        () => fetchActions()
+        () => doFetch(gameId, phaseNumber)
       )
       .subscribe()
 
-    channelRef.current = channel
-
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
+      subscribedRef.current = false
+      supabase.removeChannel(channel)
     }
   }, [gameId, phaseNumber])
 
@@ -58,9 +48,8 @@ export function useActions(gameId, phaseNumber) {
       }, { onConflict: 'game_id,player_id,action_type,phase_number' })
       .select()
       .single()
-
     return { data, error }
   }, [gameId, phaseNumber])
 
-  return { actions, loading, refetch: fetchActions, submitAction }
+  return { actions, loading, submitAction }
 }

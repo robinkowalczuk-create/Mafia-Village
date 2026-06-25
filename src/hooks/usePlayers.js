@@ -1,50 +1,47 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function usePlayers(gameId) {
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(true)
-  const channelRef = useRef(null)
+  const subscribedRef = useRef(false)
 
-  const fetchPlayers = useCallback(async () => {
-    if (!gameId) return
-    const { data } = await supabase
+  useEffect(() => {
+    if (!gameId || subscribedRef.current) return
+    subscribedRef.current = true
+
+    // Initial fetch
+    supabase
       .from('mv_players')
       .select('*')
       .eq('game_id', gameId)
       .order('joined_at', { ascending: true })
-
-    if (data) setPlayers(data)
-    setLoading(false)
-  }, [gameId])
-
-  useEffect(() => {
-    if (!gameId) return
-    fetchPlayers()
-
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current)
-      channelRef.current = null
-    }
+      .then(({ data }) => {
+        if (data) setPlayers(data)
+        setLoading(false)
+      })
 
     const channel = supabase
-      .channel(`players:${gameId}:${Date.now()}`)
+      .channel(`players_${gameId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'mv_players', filter: `game_id=eq.${gameId}` },
-        () => fetchPlayers()
+        () => {
+          supabase
+            .from('mv_players')
+            .select('*')
+            .eq('game_id', gameId)
+            .order('joined_at', { ascending: true })
+            .then(({ data }) => { if (data) setPlayers(data) })
+        }
       )
       .subscribe()
 
-    channelRef.current = channel
-
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
+      subscribedRef.current = false
+      supabase.removeChannel(channel)
     }
   }, [gameId])
 
-  return { players, loading, refetch: fetchPlayers }
+  return { players, loading }
 }

@@ -4,45 +4,35 @@ import { supabase } from '../lib/supabase'
 export function useVotes(gameId, phaseNumber) {
   const [votes, setVotes] = useState([])
   const [loading, setLoading] = useState(true)
-  const channelRef = useRef(null)
+  const subscribedRef = useRef(false)
 
-  const fetchVotes = useCallback(async () => {
-    if (!gameId || phaseNumber == null) return
-    const { data } = await supabase
+  const doFetch = (gid, phase) => {
+    supabase
       .from('mv_votes')
       .select('*')
-      .eq('game_id', gameId)
-      .eq('phase_number', phaseNumber)
-
-    if (data) setVotes(data)
-    setLoading(false)
-  }, [gameId, phaseNumber])
+      .eq('game_id', gid)
+      .eq('phase_number', phase)
+      .then(({ data }) => { if (data) setVotes(data); setLoading(false) })
+  }
 
   useEffect(() => {
-    if (!gameId) return
-    fetchVotes()
+    if (!gameId || phaseNumber == null || subscribedRef.current) return
+    subscribedRef.current = true
 
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current)
-      channelRef.current = null
-    }
+    doFetch(gameId, phaseNumber)
 
     const channel = supabase
-      .channel(`votes:${gameId}:${phaseNumber}:${Date.now()}`)
+      .channel(`votes_${gameId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'mv_votes', filter: `game_id=eq.${gameId}` },
-        () => fetchVotes()
+        () => doFetch(gameId, phaseNumber)
       )
       .subscribe()
 
-    channelRef.current = channel
-
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
+      subscribedRef.current = false
+      supabase.removeChannel(channel)
     }
   }, [gameId, phaseNumber])
 
@@ -57,9 +47,8 @@ export function useVotes(gameId, phaseNumber) {
       }, { onConflict: 'game_id,voter_id,phase_number' })
       .select()
       .single()
-
     return { data, error }
   }, [gameId, phaseNumber])
 
-  return { votes, loading, refetch: fetchVotes, castVote }
+  return { votes, loading, castVote }
 }

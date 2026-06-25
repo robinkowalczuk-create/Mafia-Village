@@ -5,40 +5,31 @@ export function useGame(gameCode) {
   const [game, setGame] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const channelRef = useRef(null)
-
-  const fetchGame = useCallback(async () => {
-    if (!gameCode) return
-    const { data, error } = await supabase
-      .from('mv_games')
-      .select('*')
-      .eq('code', gameCode.toUpperCase())
-      .single()
-
-    if (error) {
-      setError(error.message)
-    } else {
-      setGame(data)
-    }
-    setLoading(false)
-  }, [gameCode])
+  const subscribedRef = useRef(false)
+  const gameIdRef = useRef(null)
 
   useEffect(() => {
-    if (!gameCode) return
-    fetchGame()
+    if (!gameCode || subscribedRef.current) return
+    subscribedRef.current = true
 
-    // Remove any existing channel before creating a new one
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current)
-      channelRef.current = null
-    }
+    const upper = gameCode.toUpperCase()
 
-    const channelName = `game:${gameCode}:${Date.now()}`
+    supabase
+      .from('mv_games')
+      .select('*')
+      .eq('code', upper)
+      .single()
+      .then(({ data, error }) => {
+        if (error) { setError(error.message) }
+        else { setGame(data); gameIdRef.current = data?.id }
+        setLoading(false)
+      })
+
     const channel = supabase
-      .channel(channelName)
+      .channel(`game_${gameCode}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'mv_games', filter: `code=eq.${gameCode.toUpperCase()}` },
+        { event: '*', schema: 'public', table: 'mv_games', filter: `code=eq.${upper}` },
         (payload) => {
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             setGame(payload.new)
@@ -47,27 +38,23 @@ export function useGame(gameCode) {
       )
       .subscribe()
 
-    channelRef.current = channel
-
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
+      subscribedRef.current = false
+      supabase.removeChannel(channel)
     }
   }, [gameCode])
 
   const updateGame = useCallback(async (updates) => {
-    if (!game?.id) return { error: 'No game' }
+    if (!gameIdRef.current) return { error: 'No game' }
     const { data, error } = await supabase
       .from('mv_games')
       .update(updates)
-      .eq('id', game.id)
+      .eq('id', gameIdRef.current)
       .select()
       .single()
     if (!error) setGame(data)
     return { data, error }
-  }, [game?.id])
+  }, [])
 
-  return { game, loading, error, refetch: fetchGame, updateGame }
+  return { game, loading, error, updateGame }
 }
