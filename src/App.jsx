@@ -123,7 +123,7 @@ export default function App() {
         return <LobbyScreen game={game} currentPlayer={currentPlayer} onPlayAgain={handlePlayAgain} />
 
       case PHASES.ROLE_REVEAL:
-        return <RoleRevealScreen game={game} currentPlayer={currentPlayer} />
+        return <RoleRevealScreen game={game} currentPlayer={currentPlayer} players={players} />
 
       case PHASES.NIGHT:
         return <NightScreen game={game} currentPlayer={currentPlayer} />
