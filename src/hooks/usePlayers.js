@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function usePlayers(gameId) {
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(true)
+  const channelRef = useRef(null)
 
   const fetchPlayers = useCallback(async () => {
     if (!gameId) return
@@ -21,8 +22,13 @@ export function usePlayers(gameId) {
     if (!gameId) return
     fetchPlayers()
 
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+
     const channel = supabase
-      .channel(`players:${gameId}`)
+      .channel(`players:${gameId}:${Date.now()}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'mv_players', filter: `game_id=eq.${gameId}` },
@@ -30,8 +36,15 @@ export function usePlayers(gameId) {
       )
       .subscribe()
 
-    return () => supabase.removeChannel(channel)
-  }, [gameId, fetchPlayers])
+    channelRef.current = channel
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+    }
+  }, [gameId])
 
   return { players, loading, refetch: fetchPlayers }
 }

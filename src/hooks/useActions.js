@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function useActions(gameId, phaseNumber) {
   const [actions, setActions] = useState([])
   const [loading, setLoading] = useState(true)
+  const channelRef = useRef(null)
 
   const fetchActions = useCallback(async () => {
     if (!gameId || phaseNumber == null) return
@@ -21,8 +22,13 @@ export function useActions(gameId, phaseNumber) {
     if (!gameId) return
     fetchActions()
 
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+
     const channel = supabase
-      .channel(`actions:${gameId}:${phaseNumber}`)
+      .channel(`actions:${gameId}:${phaseNumber}:${Date.now()}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'mv_actions', filter: `game_id=eq.${gameId}` },
@@ -30,8 +36,15 @@ export function useActions(gameId, phaseNumber) {
       )
       .subscribe()
 
-    return () => supabase.removeChannel(channel)
-  }, [gameId, phaseNumber, fetchActions])
+    channelRef.current = channel
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+    }
+  }, [gameId, phaseNumber])
 
   const submitAction = useCallback(async (playerId, actionType, targetId = null) => {
     const { data, error } = await supabase

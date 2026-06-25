@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function useGame(gameCode) {
   const [game, setGame] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const channelRef = useRef(null)
 
   const fetchGame = useCallback(async () => {
     if (!gameCode) return
@@ -26,8 +27,15 @@ export function useGame(gameCode) {
     if (!gameCode) return
     fetchGame()
 
+    // Remove any existing channel before creating a new one
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+
+    const channelName = `game:${gameCode}:${Date.now()}`
     const channel = supabase
-      .channel(`game:${gameCode}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'mv_games', filter: `code=eq.${gameCode.toUpperCase()}` },
@@ -39,8 +47,15 @@ export function useGame(gameCode) {
       )
       .subscribe()
 
-    return () => supabase.removeChannel(channel)
-  }, [gameCode, fetchGame])
+    channelRef.current = channel
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+    }
+  }, [gameCode])
 
   const updateGame = useCallback(async (updates) => {
     if (!game?.id) return { error: 'No game' }

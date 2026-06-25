@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function useVotes(gameId, phaseNumber) {
   const [votes, setVotes] = useState([])
   const [loading, setLoading] = useState(true)
+  const channelRef = useRef(null)
 
   const fetchVotes = useCallback(async () => {
     if (!gameId || phaseNumber == null) return
@@ -21,8 +22,13 @@ export function useVotes(gameId, phaseNumber) {
     if (!gameId) return
     fetchVotes()
 
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+
     const channel = supabase
-      .channel(`votes:${gameId}:${phaseNumber}`)
+      .channel(`votes:${gameId}:${phaseNumber}:${Date.now()}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'mv_votes', filter: `game_id=eq.${gameId}` },
@@ -30,11 +36,17 @@ export function useVotes(gameId, phaseNumber) {
       )
       .subscribe()
 
-    return () => supabase.removeChannel(channel)
-  }, [gameId, phaseNumber, fetchVotes])
+    channelRef.current = channel
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+    }
+  }, [gameId, phaseNumber])
 
   const castVote = useCallback(async (voterId, targetId) => {
-    // Upsert : remplace le vote existant si le joueur revoie
     const { data, error } = await supabase
       .from('mv_votes')
       .upsert({
