@@ -27,19 +27,19 @@ export default function App() {
   const [vibroEnabled, setVibroEnabled] = useState(true)
 
   const { game, loading } = useGame(gameCode)
+
+  // ── UN SEUL usePlayers ici, passé en prop à tous les écrans ──
   const { players } = usePlayers(game?.id)
 
-  // Re-hydrate current player from Supabase on mount
+  // Rehydrate au montage si session existante
   useEffect(() => {
     const rehydrate = async () => {
       const playerId = getOrCreatePlayerId()
       const savedCode = sessionStorage.getItem('mafia_game_code')
       if (!savedCode || !playerId) return
-
       const { data: gameData } = await supabase
         .from('mv_games').select('*').eq('code', savedCode).single()
       if (!gameData) return
-
       const { data: playerData } = await supabase
         .from('mv_players').select('*').eq('id', playerId).eq('game_id', gameData.id).single()
       if (playerData) setCurrentPlayer(playerData)
@@ -47,20 +47,18 @@ export default function App() {
     rehydrate()
   }, [])
 
-  // Keep currentPlayer in sync with realtime players
+  // Sync currentPlayer avec le realtime players
   useEffect(() => {
-    if (!currentPlayer || !players.length) return
+    if (!currentPlayer?.id || !players.length) return
     const updated = players.find(p => p.id === currentPlayer.id)
     if (updated) setCurrentPlayer(updated)
   }, [players])
 
-  // Phase change → show overlay
+  // Overlay de transition de phase
   useEffect(() => {
     if (!game) return
     const phase = game.current_phase
-
     if (phase !== prevPhase) {
-      // Phases that get a cinematic overlay
       const overlayPhases = [PHASES.NIGHT, PHASES.DAY, PHASES.VOTE, PHASES.ELIMINATION, PHASES.NIGHT_RESOLUTION]
       if (overlayPhases.includes(phase) && prevPhase !== null) {
         setOverlayPhase(phase)
@@ -87,21 +85,10 @@ export default function App() {
     sessionStorage.removeItem('mafia_game_code')
   }
 
-  const toggleSound = () => {
-    const on = sounds.toggle()
-    setSoundEnabled(on)
-  }
+  const toggleSound = () => { const on = sounds.toggle(); setSoundEnabled(on) }
+  const toggleVibro = () => { const on = sounds.toggleVibrations(); setVibroEnabled(on) }
 
-  const toggleVibro = () => {
-    const on = sounds.toggleVibrations()
-    setVibroEnabled(on)
-  }
-
-  // ── RENDER ──
-
-  if (!gameCode || !currentPlayer) {
-    return <HomeScreen onJoined={handleJoined} />
-  }
+  if (!gameCode || !currentPlayer) return <HomeScreen onJoined={handleJoined} />
 
   if (loading || !game) {
     return (
@@ -117,74 +104,47 @@ export default function App() {
 
   const phase = game.current_phase
 
+  // Toutes les props communes
+  const screenProps = { game, currentPlayer, players }
+
   const renderPhase = () => {
     switch (phase) {
-      case PHASES.LOBBY:
-        return <LobbyScreen game={game} currentPlayer={currentPlayer} onPlayAgain={handlePlayAgain} />
-
-      case PHASES.ROLE_REVEAL:
-        return <RoleRevealScreen game={game} currentPlayer={currentPlayer} players={players} />
-
-      case PHASES.NIGHT:
-        return <NightScreen game={game} currentPlayer={currentPlayer} />
-
+      case PHASES.LOBBY:          return <LobbyScreen {...screenProps} onPlayAgain={handlePlayAgain} />
+      case PHASES.ROLE_REVEAL:    return <RoleRevealScreen {...screenProps} />
+      case PHASES.NIGHT:          return <NightScreen {...screenProps} />
       case PHASES.NIGHT_RESOLUTION:
-      case PHASES.DAY:
-        return <DayScreen game={game} currentPlayer={currentPlayer} />
-
-      case PHASES.VOTE:
-        return <VoteScreen game={game} currentPlayer={currentPlayer} />
-
-      case PHASES.ELIMINATION:
-        return <EliminationScreen game={game} currentPlayer={currentPlayer} />
-
-      case PHASES.HUNTER_SHOT:
-        return <HunterShotScreen game={game} currentPlayer={currentPlayer} />
-
-      case PHASES.VICTORY:
-        return <VictoryScreen game={game} currentPlayer={currentPlayer} onPlayAgain={handlePlayAgain} />
-
-      default:
-        return (
-          <div className="screen flex items-center justify-center">
-            <p className="text-parchment-dim font-body text-sm">Phase inconnue : {phase}</p>
-          </div>
-        )
+      case PHASES.DAY:            return <DayScreen {...screenProps} />
+      case PHASES.VOTE:           return <VoteScreen {...screenProps} />
+      case PHASES.ELIMINATION:    return <EliminationScreen {...screenProps} />
+      case PHASES.HUNTER_SHOT:    return <HunterShotScreen {...screenProps} />
+      case PHASES.VICTORY:        return <VictoryScreen {...screenProps} onPlayAgain={handlePlayAgain} />
+      default: return (
+        <div className="screen flex items-center justify-center">
+          <p className="text-parchment-dim font-body text-sm">Phase inconnue : {phase}</p>
+        </div>
+      )
     }
   }
 
   return (
     <>
-      {/* Sound/vibro controls — persistent top-right */}
       {phase !== PHASES.LOBBY && phase !== PHASES.VICTORY && (
         <div className="fixed top-3 right-3 z-40 flex gap-2">
-          <button
-            onClick={toggleVibro}
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-opacity ${vibroEnabled ? 'opacity-70' : 'opacity-25'}`}
-          >
+          <button onClick={toggleVibro}
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-opacity ${vibroEnabled ? 'opacity-70' : 'opacity-25'}`}>
             📳
           </button>
-          <button
-            onClick={toggleSound}
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-opacity ${soundEnabled ? 'opacity-70' : 'opacity-25'}`}
-          >
+          <button onClick={toggleSound}
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition-opacity ${soundEnabled ? 'opacity-70' : 'opacity-25'}`}>
             {soundEnabled ? '🔊' : '🔇'}
           </button>
         </div>
       )}
 
-      {/* Phase overlay */}
       {showOverlay && overlayPhase && (
-        <PhaseOverlay
-          phase={overlayPhase}
-          onDone={() => {
-            setShowOverlay(false)
-            setOverlayPhase(null)
-          }}
-        />
+        <PhaseOverlay phase={overlayPhase} onDone={() => { setShowOverlay(false); setOverlayPhase(null) }} />
       )}
 
-      {/* Current phase screen */}
       {renderPhase()}
     </>
   )

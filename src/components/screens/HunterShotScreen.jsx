@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { usePlayers } from '../../hooks/usePlayers'
 import { PHASES } from '../../lib/constants'
 import { checkVictory } from '../../lib/gameUtils'
 import { supabase } from '../../lib/supabase'
 import { sounds } from '../../lib/sounds'
 
-export function HunterShotScreen({ game, currentPlayer }) {
-  const { players } = usePlayers(game.id)
+export function HunterShotScreen({ game, currentPlayer, players = [] }) {
   const [selectedTarget, setSelectedTarget] = useState(null)
   const [done, setDone] = useState(false)
 

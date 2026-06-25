@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react'
-import { usePlayers } from '../../hooks/usePlayers'
 import { PHASES } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
 import { sounds } from '../../lib/sounds'
 
-export function DayScreen({ game, currentPlayer }) {
-  const { players } = usePlayers(game.id)
+export function DayScreen({ game, currentPlayer, players = [] }) {
   const [revealed, setRevealed] = useState(false)
 
   const nightKills = game.night_kills || []

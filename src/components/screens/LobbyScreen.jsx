@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { usePlayers } from '../../hooks/usePlayers'
 import { assignRoles } from '../../lib/gameUtils'
 import { PHASES, ROLE_COMPOSITIONS } from '../../lib/constants'
 import { Button } from '../ui/Button'
 import { sounds } from '../../lib/sounds'
 import { clearPlayerId } from '../../lib/gameUtils'
 
-export function LobbyScreen({ game, currentPlayer, onPlayAgain }) {
-  const { players } = usePlayers(game.id)
+export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) {
   const [starting, setStarting] = useState(false)
   const [copied, setCopied] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)

@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react'
 import Confetti from 'react-confetti'
-import { usePlayers } from '../../hooks/usePlayers'
 import { ROLES, VICTORY_CONDITIONS } from '../../lib/constants'
 import { sounds } from '../../lib/sounds'
 import { clearPlayerId } from '../../lib/gameUtils'
 
-export function VictoryScreen({ game, currentPlayer, onPlayAgain }) {
-  const { players } = usePlayers(game.id)
+export function VictoryScreen({ game, currentPlayer, players = [], onPlayAgain }) {
   const [showConfetti, setShowConfetti] = useState(false)
   const [showRoles, setShowRoles] = useState(false)
   const [windowSize, setWindowSize] = useState({ width: window.innerWidth, height: window.innerHeight })

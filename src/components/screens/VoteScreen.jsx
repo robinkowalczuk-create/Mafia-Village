@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { usePlayers } from '../../hooks/usePlayers'
 import { useVotes } from '../../hooks/useVotes'
 import { CountdownTimer } from '../ui/CountdownTimer'
 import { tallyVotes } from '../../lib/gameUtils'
@@ -7,8 +6,7 @@ import { VOTE_DURATION_SECONDS, PHASES } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
 import { sounds } from '../../lib/sounds'
 
-export function VoteScreen({ game, currentPlayer }) {
-  const { players } = usePlayers(game.id)
+export function VoteScreen({ game, currentPlayer, players = [] }) {
   const { votes, castVote } = useVotes(game.id, game.phase_number)
   const [myVote, setMyVote] = useState(null)
   const [timerRunning, setTimerRunning] = useState(true)

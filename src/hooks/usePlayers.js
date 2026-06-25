@@ -1,16 +1,14 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 export function usePlayers(gameId) {
   const [players, setPlayers] = useState([])
   const [loading, setLoading] = useState(true)
-  const gameIdRef = useRef(null)
 
   useEffect(() => {
     if (!gameId) return
-    // Si même gameId, pas besoin de re-souscrire
-    if (gameIdRef.current === gameId) return
-    gameIdRef.current = gameId
+
+    let active = true
 
     const fetch = () =>
       supabase
@@ -18,12 +16,12 @@ export function usePlayers(gameId) {
         .select('*')
         .eq('game_id', gameId)
         .order('joined_at', { ascending: true })
-        .then(({ data }) => { if (data) { setPlayers(data); setLoading(false) } })
+        .then(({ data }) => { if (active && data) { setPlayers(data); setLoading(false) } })
 
     fetch()
 
     const channel = supabase
-      .channel(`mv_players_${gameId}`)
+      .channel(`mv_players_${gameId}_${Math.random()}`)
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'mv_players', filter: `game_id=eq.${gameId}` },
         fetch
@@ -31,7 +29,7 @@ export function usePlayers(gameId) {
       .subscribe()
 
     return () => {
-      gameIdRef.current = null
+      active = false
       supabase.removeChannel(channel)
     }
   }, [gameId])

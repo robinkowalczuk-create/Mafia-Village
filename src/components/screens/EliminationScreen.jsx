@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react'
-import { usePlayers } from '../../hooks/usePlayers'
 import { ROLES, PHASES } from '../../lib/constants'
 import { checkVictory } from '../../lib/gameUtils'
 import { supabase } from '../../lib/supabase'
 import { sounds } from '../../lib/sounds'
 
-export function EliminationScreen({ game, currentPlayer }) {
-  const { players } = usePlayers(game.id)
+export function EliminationScreen({ game, currentPlayer, players = [] }) {
   const [phase, setPhase] = useState('suspense') // suspense → name → role → aftermath
   const [checking, setChecking] = useState(false)
 

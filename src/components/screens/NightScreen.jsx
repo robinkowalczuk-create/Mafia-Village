@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react'
-import { usePlayers } from '../../hooks/usePlayers'
 import { useActions } from '../../hooks/useActions'
 import { ROLES, ROLE_NIGHT_INSTRUCTIONS, PHASES } from '../../lib/constants'
 import { sounds } from '../../lib/sounds'
 import { supabase } from '../../lib/supabase'
 import { checkVictory } from '../../lib/gameUtils'
 
-export function NightScreen({ game, currentPlayer }) {
-  const { players } = usePlayers(game.id)
+export function NightScreen({ game, currentPlayer, players = [] }) {
   const { actions, submitAction } = useActions(game.id, game.phase_number)
   const [selectedTarget, setSelectedTarget] = useState(null)
   const [actionDone, setActionDone] = useState(false)
