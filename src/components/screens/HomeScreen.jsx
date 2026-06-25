@@ -21,7 +21,7 @@ export function HomeScreen({ onJoined }) {
 
     // Créer la partie
     const { data: game, error: gameErr } = await supabase
-      .from('games')
+      .from('mv_games')
       .insert({ code: roomCode, status: 'lobby', current_phase: 'lobby', phase_number: 0 })
       .select()
       .single()
@@ -30,7 +30,7 @@ export function HomeScreen({ onJoined }) {
 
     // Rejoindre comme MJ
     const { data: player, error: playerErr } = await supabase
-      .from('players')
+      .from('mv_players')
       .insert({ id: playerId, game_id: game.id, name: name.trim(), is_mj: true })
       .select()
       .single()
@@ -53,7 +53,7 @@ export function HomeScreen({ onJoined }) {
 
     // Trouver la partie
     const { data: game, error: gameErr } = await supabase
-      .from('games')
+      .from('mv_games')
       .select('*')
       .eq('code', upperCode)
       .single()
@@ -63,7 +63,7 @@ export function HomeScreen({ onJoined }) {
 
     // Vérifier si déjà dans la partie
     const { data: existing } = await supabase
-      .from('players')
+      .from('mv_players')
       .select('*')
       .eq('id', playerId)
       .eq('game_id', game.id)
@@ -77,7 +77,7 @@ export function HomeScreen({ onJoined }) {
 
     // Ajouter le joueur
     const { data: player, error: playerErr } = await supabase
-      .from('players')
+      .from('mv_players')
       .insert({ id: playerId, game_id: game.id, name: name.trim(), is_mj: false })
       .select()
       .single()

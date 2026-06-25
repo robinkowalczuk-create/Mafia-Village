@@ -18,11 +18,11 @@ export function HunterShotScreen({ game, currentPlayer }) {
     if (!selectedTarget || !isHunter) return
     sounds.elimination()
 
-    await supabase.from('players')
+    await supabase.from('mv_players')
       .update({ is_alive: false, hunter_shot_used: true })
       .eq('id', selectedTarget)
 
-    await supabase.from('players')
+    await supabase.from('mv_players')
       .update({ hunter_shot_used: true })
       .eq('id', hunter.id)
 
@@ -37,13 +37,13 @@ export function HunterShotScreen({ game, currentPlayer }) {
     setTimeout(async () => {
       if (winner) {
         sounds[winner === 'werewolves' ? 'wolvesVictory' : 'villageVictory']()
-        await supabase.from('games').update({
+        await supabase.from('mv_games').update({
           current_phase: PHASES.VICTORY,
           status: 'finished',
           winner_camp: winner,
         }).eq('id', game.id)
       } else {
-        await supabase.from('games').update({
+        await supabase.from('mv_games').update({
           current_phase: PHASES.ELIMINATION,
           hunter_target_id: selectedTarget,
         }).eq('id', game.id)

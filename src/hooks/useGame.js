@@ -9,7 +9,7 @@ export function useGame(gameCode) {
   const fetchGame = useCallback(async () => {
     if (!gameCode) return
     const { data, error } = await supabase
-      .from('games')
+      .from('mv_games')
       .select('*')
       .eq('code', gameCode.toUpperCase())
       .single()
@@ -30,7 +30,7 @@ export function useGame(gameCode) {
       .channel(`game:${gameCode}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'games', filter: `code=eq.${gameCode.toUpperCase()}` },
+        { event: '*', schema: 'public', table: 'mv_games', filter: `code=eq.${gameCode.toUpperCase()}` },
         (payload) => {
           if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
             setGame(payload.new)
@@ -45,7 +45,7 @@ export function useGame(gameCode) {
   const updateGame = useCallback(async (updates) => {
     if (!game?.id) return { error: 'No game' }
     const { data, error } = await supabase
-      .from('games')
+      .from('mv_games')
       .update(updates)
       .eq('id', game.id)
       .select()

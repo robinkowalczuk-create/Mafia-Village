@@ -46,13 +46,13 @@ export function EliminationScreen({ game, currentPlayer }) {
 
     if (winner) {
       sounds[winner === 'werewolves' ? 'wolvesVictory' : 'villageVictory']()
-      await supabase.from('games').update({
+      await supabase.from('mv_games').update({
         current_phase: PHASES.VICTORY,
         status: 'finished',
         winner_camp: winner,
       }).eq('id', game.id)
     } else {
-      await supabase.from('games').update({
+      await supabase.from('mv_games').update({
         current_phase: PHASES.NIGHT,
         phase_number: game.phase_number + 1,
         eliminated_player_id: null,

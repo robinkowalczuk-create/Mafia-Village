@@ -8,7 +8,7 @@ export function useActions(gameId, phaseNumber) {
   const fetchActions = useCallback(async () => {
     if (!gameId || phaseNumber == null) return
     const { data } = await supabase
-      .from('actions')
+      .from('mv_actions')
       .select('*')
       .eq('game_id', gameId)
       .eq('phase_number', phaseNumber)
@@ -25,7 +25,7 @@ export function useActions(gameId, phaseNumber) {
       .channel(`actions:${gameId}:${phaseNumber}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'actions', filter: `game_id=eq.${gameId}` },
+        { event: '*', schema: 'public', table: 'mv_actions', filter: `game_id=eq.${gameId}` },
         () => fetchActions()
       )
       .subscribe()
@@ -35,7 +35,7 @@ export function useActions(gameId, phaseNumber) {
 
   const submitAction = useCallback(async (playerId, actionType, targetId = null) => {
     const { data, error } = await supabase
-      .from('actions')
+      .from('mv_actions')
       .upsert({
         game_id: gameId,
         player_id: playerId,

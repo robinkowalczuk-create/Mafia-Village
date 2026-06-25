@@ -8,7 +8,7 @@ export function useVotes(gameId, phaseNumber) {
   const fetchVotes = useCallback(async () => {
     if (!gameId || phaseNumber == null) return
     const { data } = await supabase
-      .from('votes')
+      .from('mv_votes')
       .select('*')
       .eq('game_id', gameId)
       .eq('phase_number', phaseNumber)
@@ -25,7 +25,7 @@ export function useVotes(gameId, phaseNumber) {
       .channel(`votes:${gameId}:${phaseNumber}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'votes', filter: `game_id=eq.${gameId}` },
+        { event: '*', schema: 'public', table: 'mv_votes', filter: `game_id=eq.${gameId}` },
         () => fetchVotes()
       )
       .subscribe()
@@ -36,7 +36,7 @@ export function useVotes(gameId, phaseNumber) {
   const castVote = useCallback(async (voterId, targetId) => {
     // Upsert : remplace le vote existant si le joueur revoie
     const { data, error } = await supabase
-      .from('votes')
+      .from('mv_votes')
       .upsert({
         game_id: gameId,
         voter_id: voterId,

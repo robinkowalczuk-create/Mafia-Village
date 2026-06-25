@@ -38,7 +38,7 @@ export function VoteScreen({ game, currentPlayer }) {
 
     if (isTie || !eliminated) {
       // Égalité : pas d'élimination
-      await supabase.from('games').update({
+      await supabase.from('mv_games').update({
         current_phase: PHASES.ELIMINATION,
         eliminated_player_id: null,
         vote_tie: true,
@@ -48,8 +48,8 @@ export function VoteScreen({ game, currentPlayer }) {
 
     // Idiot du Village : survit au premier vote
     if (eliminated.role === 'idiot' && !eliminated.idiot_voted_out) {
-      await supabase.from('players').update({ idiot_voted_out: true }).eq('id', eliminated.id)
-      await supabase.from('games').update({
+      await supabase.from('mv_players').update({ idiot_voted_out: true }).eq('id', eliminated.id)
+      await supabase.from('mv_games').update({
         current_phase: PHASES.ELIMINATION,
         eliminated_player_id: eliminated.id,
         vote_tie: false,
@@ -59,8 +59,8 @@ export function VoteScreen({ game, currentPlayer }) {
 
     // Chasseur éliminé : activer son pouvoir
     if (eliminated.role === 'hunter' && !eliminated.hunter_shot_used) {
-      await supabase.from('players').update({ is_alive: false }).eq('id', eliminated.id)
-      await supabase.from('games').update({
+      await supabase.from('mv_players').update({ is_alive: false }).eq('id', eliminated.id)
+      await supabase.from('mv_games').update({
         current_phase: PHASES.HUNTER_SHOT,
         eliminated_player_id: eliminated.id,
       }).eq('id', game.id)
@@ -68,8 +68,8 @@ export function VoteScreen({ game, currentPlayer }) {
     }
 
     // Élimination normale
-    await supabase.from('players').update({ is_alive: false }).eq('id', eliminated.id)
-    await supabase.from('games').update({
+    await supabase.from('mv_players').update({ is_alive: false }).eq('id', eliminated.id)
+    await supabase.from('mv_games').update({
       current_phase: PHASES.ELIMINATION,
       eliminated_player_id: eliminated.id,
       vote_tie: false,

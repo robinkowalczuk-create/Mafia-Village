@@ -37,11 +37,11 @@ export default function App() {
       if (!savedCode || !playerId) return
 
       const { data: gameData } = await supabase
-        .from('games').select('*').eq('code', savedCode).single()
+        .from('mv_games').select('*').eq('code', savedCode).single()
       if (!gameData) return
 
       const { data: playerData } = await supabase
-        .from('players').select('*').eq('id', playerId).eq('game_id', gameData.id).single()
+        .from('mv_players').select('*').eq('id', playerId).eq('game_id', gameData.id).single()
       if (playerData) setCurrentPlayer(playerData)
     }
     rehydrate()

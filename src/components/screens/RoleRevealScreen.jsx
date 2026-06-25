@@ -31,7 +31,7 @@ export function RoleRevealScreen({ game, currentPlayer }) {
 
     // Marquer le joueur comme prêt
     await supabase
-      .from('players')
+      .from('mv_players')
       .update({ role_seen: true })
       .eq('id', currentPlayer.id)
   }

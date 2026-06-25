@@ -36,14 +36,14 @@ export function LobbyScreen({ game, currentPlayer, onPhaseChange }) {
       // Mettre à jour chaque joueur avec son rôle
       for (const p of playersWithRoles) {
         await supabase
-          .from('players')
+          .from('mv_players')
           .update({ role: p.role })
           .eq('id', p.id)
       }
 
       // Changer la phase
       await supabase
-        .from('games')
+        .from('mv_games')
         .update({ current_phase: PHASES.ROLE_REVEAL, status: 'in_progress', phase_number: 1 })
         .eq('id', game.id)
 

@@ -23,17 +23,17 @@ export function DayScreen({ game, currentPlayer }) {
         if (!p?.is_alive) continue
         // Hunter power check
         if (p.role === 'hunter' && !p.hunter_shot_used) {
-          await supabase.from('games').update({ current_phase: PHASES.HUNTER_SHOT }).eq('id', game.id)
+          await supabase.from('mv_games').update({ current_phase: PHASES.HUNTER_SHOT }).eq('id', game.id)
           return
         }
         // Idiot du village : survit au premier vote (not applicable here — night kills bypass)
-        await supabase.from('players').update({ is_alive: false }).eq('id', p.id)
+        await supabase.from('mv_players').update({ is_alive: false }).eq('id', p.id)
       }
 
       sounds.nightFall()
       // Small delay then go to day
       setTimeout(async () => {
-        await supabase.from('games').update({
+        await supabase.from('mv_games').update({
           current_phase: PHASES.DAY,
           night_kills: [],
         }).eq('id', game.id)
@@ -55,7 +55,7 @@ export function DayScreen({ game, currentPlayer }) {
   // MJ advances to vote
   const startVote = async () => {
     sounds.voteStart()
-    await supabase.from('games').update({
+    await supabase.from('mv_games').update({
       current_phase: PHASES.VOTE,
       vote_started_at: new Date().toISOString(),
     }).eq('id', game.id)

@@ -8,7 +8,7 @@ export function usePlayers(gameId) {
   const fetchPlayers = useCallback(async () => {
     if (!gameId) return
     const { data } = await supabase
-      .from('players')
+      .from('mv_players')
       .select('*')
       .eq('game_id', gameId)
       .order('joined_at', { ascending: true })
@@ -25,7 +25,7 @@ export function usePlayers(gameId) {
       .channel(`players:${gameId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${gameId}` },
+        { event: '*', schema: 'public', table: 'mv_players', filter: `game_id=eq.${gameId}` },
         () => fetchPlayers()
       )
       .subscribe()

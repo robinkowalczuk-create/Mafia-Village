@@ -62,7 +62,7 @@ export function NightScreen({ game, currentPlayer }) {
 
         const nightKills = [killed, poisoned].filter(Boolean)
 
-        await supabase.from('games').update({
+        await supabase.from('mv_games').update({
           current_phase: PHASES.NIGHT_RESOLUTION,
           night_kills: nightKills,
         }).eq('id', game.id)
@@ -93,10 +93,10 @@ export function NightScreen({ game, currentPlayer }) {
   const handleSubmitWitch = async (type) => {
     if (type === 'heal') {
       await submitAction(currentPlayer.id, 'witch_heal', nightKillTarget)
-      await supabase.from('players').update({ witch_heal_used: true }).eq('id', currentPlayer.id)
+      await supabase.from('mv_players').update({ witch_heal_used: true }).eq('id', currentPlayer.id)
     } else if (type === 'poison' && selectedTarget) {
       await submitAction(currentPlayer.id, 'witch_poison', selectedTarget)
-      await supabase.from('players').update({ witch_poison_used: true }).eq('id', currentPlayer.id)
+      await supabase.from('mv_players').update({ witch_poison_used: true }).eq('id', currentPlayer.id)
     } else if (type === 'skip') {
       await submitAction(currentPlayer.id, 'witch_heal', null)
     }
