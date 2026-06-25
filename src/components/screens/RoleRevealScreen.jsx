@@ -9,22 +9,33 @@ export function RoleRevealScreen({ game, currentPlayer, players = [] }) {
   const [revealed, setRevealed] = useState(false)
   const [ready, setReady] = useState(false)
 
-  // currentPlayer est déjà synchro via App.jsx → usePlayers realtime
   const role = ROLES[currentPlayer?.role] || ROLES.villager
   const isWolf = role.camp === 'werewolves'
+  const readyCount = players.filter(p => p.role_seen).length
 
-  // Watcher : tous les joueurs ont role_seen → passer à la nuit
+  // Watcher : re-fetch depuis Supabase et vérifie si tous prêts
+  // Un seul joueur fait le check (le premier dans l'ordre)
   useEffect(() => {
-    if (!players.length || !game?.id) return
-    // Ne déclencher que si la phase est bien role_reveal (évite les doubles triggers)
-    if (game.current_phase !== PHASES.ROLE_REVEAL) return
-    const allReady = players.every(p => p.role_seen)
-    if (allReady) {
-      supabase
-        .from('mv_games')
-        .update({ current_phase: PHASES.NIGHT })
-        .eq('id', game.id)
+    if (!game?.id || game.current_phase !== PHASES.ROLE_REVEAL) return
+    if (!players.length) return
+
+    const checkAllReady = async () => {
+      const { data } = await supabase
+        .from('mv_players')
+        .select('role_seen')
+        .eq('game_id', game.id)
+
+      if (!data) return
+      const allReady = data.every(p => p.role_seen)
+      if (allReady) {
+        await supabase
+          .from('mv_games')
+          .update({ current_phase: PHASES.NIGHT })
+          .eq('id', game.id)
+      }
     }
+
+    checkAllReady()
   }, [players, game?.id, game?.current_phase])
 
   const handleFlip = () => {
@@ -46,8 +57,6 @@ export function RoleRevealScreen({ game, currentPlayer, players = [] }) {
       .eq('id', currentPlayer.id)
   }
 
-  const readyCount = players.filter(p => p.role_seen).length
-
   return (
     <div className="screen flex flex-col">
       <div className="stars-bg" />
@@ -63,7 +72,6 @@ export function RoleRevealScreen({ game, currentPlayer, players = [] }) {
 
       <div className="relative z-10 flex flex-col items-center justify-between flex-1 px-6 py-10">
 
-        {/* Top */}
         <div className="text-center animate-fade-in">
           <p className="text-parchment-dim text-xs uppercase tracking-widest font-body mb-2">
             Distribution secrète
@@ -80,7 +88,6 @@ export function RoleRevealScreen({ game, currentPlayer, players = [] }) {
         <div className="role-card-container w-64 h-96" onClick={handleFlip}>
           <div className={`role-card-inner w-full h-full ${flipped ? 'flipped' : ''}`}>
 
-            {/* Front */}
             <div className="role-card-front">
               <div className="w-64 h-96 rounded-3xl border-2 border-gold/30 flex flex-col items-center justify-center gap-6 cursor-pointer active:scale-95 transition-transform card-glow-gold animate-float"
                 style={{ background: 'linear-gradient(135deg, #1A1A2E, #0A0A14)' }}>
@@ -97,7 +104,6 @@ export function RoleRevealScreen({ game, currentPlayer, players = [] }) {
               </div>
             </div>
 
-            {/* Back */}
             <div className="role-card-back">
               <div
                 className={`w-64 h-96 rounded-3xl border-2 overflow-hidden flex flex-col items-center justify-center gap-4 ${revealed ? 'animate-glow-in' : ''}`}
