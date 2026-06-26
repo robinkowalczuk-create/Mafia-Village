@@ -4,20 +4,20 @@ import { checkVictory } from '../../lib/gameUtils'
 import { supabase } from '../../lib/supabase'
 import { sounds } from '../../lib/sounds'
 
-// Durées des phases de suspense
 const TIMING = {
-  suspense:  3000,  // "Le village a parlé..."
-  drumroll:  3500,  // dots qui clignotent
-  name:      4000,  // nom révélé
-  roleFlip:  4500,  // carte qui se retourne
-  verdict:   3500,  // "C'était un loup / Ce n'était pas un loup"
-  aftermath: 0,     // bouton continuer
+  suspense:  3000,
+  drumroll:  3500,
+  name:      4000,
+  roleFlip:  4500,
+  verdict:   3500,
+  aftermath: 0,
 }
 
 export function EliminationScreen({ game, currentPlayer, players = [] }) {
   const [phase, setPhase] = useState('suspense')
   const [checking, setChecking] = useState(false)
   const [cardFlipped, setCardFlipped] = useState(false)
+  const [winner, setWinner] = useState(null)
 
   const eliminatedId = game.eliminated_player_id
   const eliminated = players.find(p => p.id === eliminatedId)
@@ -25,6 +25,17 @@ export function EliminationScreen({ game, currentPlayer, players = [] }) {
   const role = eliminated ? ROLES[eliminated.role] : null
   const isEliminated = currentPlayer?.id === eliminatedId
 
+  // Calculer le gagnant dès qu'on a les joueurs — mais NE PAS encore l'appliquer
+  useEffect(() => {
+    if (!eliminated || !players.length) return
+    const updatedPlayers = players.map(p =>
+      p.id === eliminatedId ? { ...p, is_alive: false } : p
+    )
+    const w = checkVictory(updatedPlayers)
+    setWinner(w)
+  }, [players, eliminatedId])
+
+  // Séquence dramatique
   useEffect(() => {
     if (isTie) { sounds.phaseTransition(); setPhase('tie'); return }
     if (!eliminated) return
@@ -45,17 +56,18 @@ export function EliminationScreen({ game, currentPlayer, players = [] }) {
     return () => [t1,t2,t3,t4,t5].forEach(clearTimeout)
   }, [eliminated?.id, isTie])
 
+  // Avancer — appelé par le MJ depuis aftermath
+  // La victoire est déclarée ICI, après la séquence complète
   const advance = async () => {
     if (checking) return
     setChecking(true)
-    const updatedPlayers = players.map(p =>
-      p.id === eliminatedId ? { ...p, is_alive: false } : p
-    )
-    const winner = checkVictory(updatedPlayers)
+
     if (winner) {
       sounds[winner === 'werewolves' ? 'wolvesVictory' : 'villageVictory']()
       await supabase.from('mv_games').update({
-        current_phase: PHASES.VICTORY, status: 'finished', winner_camp: winner,
+        current_phase: PHASES.VICTORY,
+        status: 'finished',
+        winner_camp: winner,
       }).eq('id', game.id)
     } else {
       await supabase.from('mv_games').update({
@@ -100,10 +112,8 @@ export function EliminationScreen({ game, currentPlayer, players = [] }) {
             </h1>
             <div className="flex gap-3">
               {[0,1,2,3,4].map(i => (
-                <div key={i}
-                  className="w-3 h-3 rounded-full bg-blood animate-pulse"
-                  style={{ animationDelay: `${i * 0.15}s` }}
-                />
+                <div key={i} className="w-3 h-3 rounded-full bg-blood animate-pulse"
+                  style={{ animationDelay: `${i * 0.15}s` }} />
               ))}
             </div>
           </div>
@@ -117,37 +127,33 @@ export function EliminationScreen({ game, currentPlayer, players = [] }) {
               {eliminated.name}
             </h2>
             <p className="text-blood-light text-base font-body tracking-wide">
-              quitte le village...
+              quitte Grasse...
             </p>
             {isEliminated && (
               <div className="card-glow-blood p-4 text-center w-full animate-shake mt-2">
                 <p className="text-blood-light font-display text-lg">C'est vous...</p>
                 <p className="text-parchment-dim text-xs font-body mt-1">
-                  Restez silencieux. Votre rôle va être révélé à tous.
+                  Votre rôle va être révélé à tous.
                 </p>
               </div>
             )}
           </div>
         )}
 
-        {/* ── RÉVÉLATION DU RÔLE (carte flip) ── */}
+        {/* ── CARTE FLIP ── */}
         {phase === 'role' && eliminated && role && (
           <div className="flex flex-col items-center gap-5 w-full max-w-sm">
             <p className="text-parchment-dim text-sm font-body animate-fade-in">
               {eliminated.name} était...
             </p>
-
-            {/* Carte flip */}
             <div className="role-card-container w-56 h-80">
               <div className={`role-card-inner w-full h-full ${cardFlipped ? 'flipped' : ''}`}>
-                {/* Dos */}
                 <div className="role-card-front">
                   <div className="w-56 h-80 rounded-3xl border-2 border-gold/30 flex items-center justify-center"
                     style={{ background: 'linear-gradient(135deg, #1A1A2E, #0A0A14)' }}>
                     <span className="text-6xl">🂠</span>
                   </div>
                 </div>
-                {/* Face */}
                 <div className="role-card-back">
                   <div className="w-56 h-80 rounded-3xl border-2 flex flex-col items-center justify-center gap-3"
                     style={{
@@ -180,31 +186,26 @@ export function EliminationScreen({ game, currentPlayer, players = [] }) {
             <p className="text-sm font-body text-center" style={{ color: role.colorLight }}>
               {role.name} · {role.camp === 'werewolves' ? 'Camp des Loups' : 'Camp du Village'}
             </p>
-            <div className={`
-              w-full rounded-2xl p-5 text-center border animate-glow-in
-              ${role.camp === 'werewolves'
-                ? 'bg-forest/10 border-forest/30'
-                : 'bg-blood/10 border-blood/30'
-              }
-            `}>
+            <div className={`w-full rounded-2xl p-5 text-center border animate-glow-in
+              ${role.camp === 'werewolves' ? 'bg-forest/10 border-forest/30' : 'bg-blood/10 border-blood/30'}`}>
               {role.camp === 'werewolves' ? (
                 <>
                   <p className="text-2xl mb-2">✓</p>
-                  <p className="text-forest-light font-display font-bold text-lg">Bien joué, village !</p>
-                  <p className="text-parchment-dim text-xs font-body mt-1">Un loup de moins parmi vous.</p>
+                  <p className="text-forest-light font-display font-bold text-lg">Bien joué, Grasse !</p>
+                  <p className="text-parchment-dim text-xs font-body mt-1">Un loup de moins dans les collines.</p>
                 </>
               ) : (
                 <>
                   <p className="text-2xl mb-2">✗</p>
                   <p className="text-blood-light font-display font-bold text-lg">Mauvaise piste...</p>
-                  <p className="text-parchment-dim text-xs font-body mt-1">Ce n'était pas un loup. Les loups jubilent.</p>
+                  <p className="text-parchment-dim text-xs font-body mt-1">Un innocent quitte Grasse. Les loups jubilent.</p>
                 </>
               )}
             </div>
           </div>
         )}
 
-        {/* ── AFTERMATH ── */}
+        {/* ── AFTERMATH — MJ décide de continuer ou victoire ── */}
         {phase === 'aftermath' && (
           <div className="flex flex-col items-center gap-5 w-full max-w-sm animate-fade-up">
             {eliminated && role && (
@@ -221,14 +222,27 @@ export function EliminationScreen({ game, currentPlayer, players = [] }) {
               </div>
             )}
 
+            {/* Annonce victoire si applicable */}
+            {winner && (
+              <div className={`w-full rounded-2xl p-4 text-center border animate-pulse-gold
+                ${winner === 'werewolves' ? 'border-blood/40 bg-blood/10' : 'border-forest/40 bg-forest/10'}`}>
+                <p className={`font-display font-bold text-lg ${winner === 'werewolves' ? 'text-blood-light' : 'text-forest-light'}`}>
+                  {winner === 'werewolves' ? '🐺 Les Loups ont gagné !' : '☀️ Grasse est sauvée !'}
+                </p>
+              </div>
+            )}
+
             {currentPlayer?.is_mj ? (
-              <button onClick={advance} className="btn-primary w-full text-base py-5">
-                🌙 Nuit {game.phase_number + 1} →
+              <button onClick={advance} disabled={checking} className="btn-primary w-full text-base py-5">
+                {winner
+                  ? '🏆 Voir l\'écran de victoire →'
+                  : `🌙 Nuit ${game.phase_number + 1} →`
+                }
               </button>
             ) : (
               <div className="card-dark p-4 text-center w-full">
                 <p className="text-parchment-dim text-sm font-body">
-                  ⏳ En attente du MJ pour continuer...
+                  ⏳ En attente du MJ...
                 </p>
               </div>
             )}
@@ -236,12 +250,12 @@ export function EliminationScreen({ game, currentPlayer, players = [] }) {
         )}
 
         {/* ── ÉGALITÉ ── */}
-        {isTie && (
+        {(phase === 'tie' || isTie) && (
           <div className="flex flex-col items-center gap-6 animate-fade-in w-full max-w-sm">
             <div className="text-6xl">🤝</div>
             <h1 className="font-display font-black text-3xl text-gold text-center">Égalité !</h1>
             <p className="text-parchment-dim text-sm font-body text-center">
-              Le village ne s'est pas mis d'accord. Personne n'est éliminé.
+              Grasse ne s'est pas mis d'accord. Personne n'est éliminé.
             </p>
             {currentPlayer?.is_mj ? (
               <button onClick={advance} className="btn-primary w-full mt-4">

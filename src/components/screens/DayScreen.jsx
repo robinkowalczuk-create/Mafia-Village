@@ -40,21 +40,8 @@ export function DayScreen({ game, currentPlayer, players = [] }) {
         await supabase.from('mv_players').update({ is_alive: false }).eq('id', p.id)
       }
 
-      // Check victoire après morts nocturnes
-      const updatedPlayers = players.map(p =>
-        nightKills.includes(p.id) ? { ...p, is_alive: false } : p
-      )
-      const winner = checkVictory(updatedPlayers)
-      if (winner) {
-        sounds[winner === 'werewolves' ? 'wolvesVictory' : 'villageVictory']()
-        await supabase.from('mv_games').update({
-          current_phase: PHASES.VICTORY,
-          status: 'finished',
-          winner_camp: winner,
-        }).eq('id', game.id)
-        return
-      }
     }
+    // Note: victoire vérifiée après la séquence de révélation
 
     applyKills()
   }, [game.current_phase, players.length])
@@ -90,9 +77,23 @@ export function DayScreen({ game, currentPlayer, players = [] }) {
         }, 2000)
       } else {
         setTimeout(async () => {
-          await supabase.from('mv_games').update({
-            current_phase: PHASES.DAY, night_kills: [],
-          }).eq('id', game.id)
+          // Check victoire après révélation complète des cartes
+          const updatedPlayers = players.map(p =>
+            nightKills.includes(p.id) ? { ...p, is_alive: false } : p
+          )
+          const winner = checkVictory(updatedPlayers)
+          if (winner) {
+            sounds[winner === 'werewolves' ? 'wolvesVictory' : 'villageVictory']()
+            await supabase.from('mv_games').update({
+              current_phase: PHASES.VICTORY,
+              status: 'finished',
+              winner_camp: winner,
+            }).eq('id', game.id)
+          } else {
+            await supabase.from('mv_games').update({
+              current_phase: PHASES.DAY, night_kills: [],
+            }).eq('id', game.id)
+          }
         }, 3000)
       }
     }, DEATH_TIMING.suspense + DEATH_TIMING.name + DEATH_TIMING.role)

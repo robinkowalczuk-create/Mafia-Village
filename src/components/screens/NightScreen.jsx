@@ -242,7 +242,7 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
         )}
 
         {/* === VOYANTE === */}
-        {myRoleId === 'seer' && !actionDone && (
+        {myRoleId === 'seer' && !actionDone && currentPlayer?.is_alive && (
           <div className="flex flex-col gap-4 flex-1">
             <p className="text-parchment-dim text-xs text-center font-body">Choisissez un joueur à inspecter</p>
             <div className="flex flex-col gap-2 overflow-y-auto flex-1">
