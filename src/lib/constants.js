@@ -1,14 +1,14 @@
 // ═══════════════════════════════════════════════════════
 // RÔLES
 // ═══════════════════════════════════════════════════════
-
+import villagerImg from '../assets/villager.png'
 export const ROLES = {
   villager: {
     id: 'villager',
     name: 'Villageois',
     camp: 'village',
     emoji: '🏡',
-    image: '/villager.png',  
+    image: villagerImg,
     color: '#2E5E4E',
     colorLight: '#3D7A64',
     bgGradient: 'from-forest/30 to-night',
