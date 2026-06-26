@@ -300,7 +300,7 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
         )}
 
         {/* === SORCIÈRE === */}
-        {myRoleId === 'witch' && !actionDone && (
+        {myRoleId === 'witch' && !actionDone && currentPlayer?.is_alive && (
           <div className="flex flex-col gap-4 flex-1">
             {!witchMode && (
               <>

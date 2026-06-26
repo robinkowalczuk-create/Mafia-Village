@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useVotes } from '../../hooks/useVotes'
 import { CountdownTimer } from '../ui/CountdownTimer'
-import { tallyVotes } from '../../lib/gameUtils'
+import { tallyVotes, checkVictory } from '../../lib/gameUtils'
 import { VOTE_DURATION_SECONDS, PHASES } from '../../lib/constants'
 import { supabase } from '../../lib/supabase'
 import { sounds } from '../../lib/sounds'
@@ -65,8 +65,23 @@ export function VoteScreen({ game, currentPlayer, players = [] }) {
       return
     }
 
-    // Élimination normale
+    // Élimination normale — check victoire immédiat
     await supabase.from('mv_players').update({ is_alive: false }).eq('id', eliminated.id)
+
+    const updatedPlayers = players.map(p =>
+      p.id === eliminated.id ? { ...p, is_alive: false } : p
+    )
+    const winner = checkVictory(updatedPlayers)
+    if (winner) {
+      await supabase.from('mv_games').update({
+        current_phase: PHASES.VICTORY,
+        status: 'finished',
+        winner_camp: winner,
+        eliminated_player_id: eliminated.id,
+      }).eq('id', game.id)
+      return
+    }
+
     await supabase.from('mv_games').update({
       current_phase: PHASES.ELIMINATION,
       eliminated_player_id: eliminated.id,
