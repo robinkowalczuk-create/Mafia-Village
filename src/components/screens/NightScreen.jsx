@@ -31,29 +31,49 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
     if (myAction) setActionDone(true)
   }, [actions, currentPlayer?.id])
 
-  // Auto-advance quand tous les acteurs nocturnes ont joué
+  // Auto-advance — re-fetch depuis Supabase pour éviter les états figés
   useEffect(() => {
-    if (advancedRef.current) return
-    if (!game || game.current_phase !== PHASES.NIGHT) return
-    if (!players.length || !actions.length) return
+    if (!game?.id || game.current_phase !== PHASES.NIGHT) return
+    if (!players.length) return
 
-    const nightActors = players.filter(p =>
-      p.is_alive &&
-      ROLES[p.role]?.nightAction &&
-      ROLES[p.role]?.nightAction !== 'spy'
-    )
-    if (!nightActors.length) return
+    const checkAndAdvance = async () => {
+      if (advancedRef.current) return
 
-    const doneIds = actions.map(a => a.player_id)
-    const allDone = nightActors.every(p => doneIds.includes(p.id))
+      // Re-fetch les actions directement depuis Supabase
+      const { data: freshActions } = await supabase
+        .from('mv_actions')
+        .select('*')
+        .eq('game_id', game.id)
+        .eq('phase_number', game.phase_number)
 
-    if (allDone) {
+      if (!freshActions) return
+
+      const nightActors = players.filter(p =>
+        p.is_alive &&
+        ROLES[p.role]?.nightAction &&
+        ROLES[p.role]?.nightAction !== 'spy'
+      )
+
+      // Pas d'acteurs nocturnes (ex: 2 joueurs villageois+loup, seul le loup agit)
+      if (!nightActors.length) {
+        advancedRef.current = true
+        await supabase.from('mv_games').update({
+          current_phase: PHASES.NIGHT_RESOLUTION,
+          night_kills: [],
+        }).eq('id', game.id)
+        return
+      }
+
+      const doneIds = freshActions.map(a => a.player_id)
+      const allDone = nightActors.every(p => doneIds.includes(p.id))
+
+      if (!allDone) return
       advancedRef.current = true
 
-      const killActions    = actions.filter(a => a.action_type === 'werewolf_kill')
-      const healActions    = actions.filter(a => a.action_type === 'witch_heal')
-      const poisonActions  = actions.filter(a => a.action_type === 'witch_poison')
-      const protectActions = actions.filter(a => a.action_type === 'bodyguard_protect')
+      const killActions    = freshActions.filter(a => a.action_type === 'werewolf_kill')
+      const healActions    = freshActions.filter(a => a.action_type === 'witch_heal')
+      const poisonActions  = freshActions.filter(a => a.action_type === 'witch_poison')
+      const protectActions = freshActions.filter(a => a.action_type === 'bodyguard_protect')
 
       let killed = killActions[0]?.target_id || null
       const protected_ = protectActions[0]?.target_id
@@ -64,12 +84,14 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
       const poisoned = poisonActions[0]?.target_id || null
       const nightKills = [killed, poisoned].filter(Boolean)
 
-      supabase.from('mv_games').update({
+      await supabase.from('mv_games').update({
         current_phase: PHASES.NIGHT_RESOLUTION,
         night_kills: nightKills,
       }).eq('id', game.id)
     }
-  }, [actions, players, game])
+
+    checkAndAdvance()
+  }, [actions, players, game?.id, game?.phase_number, game?.current_phase])
 
   const handleTarget = (id) => { setSelectedTarget(p => p === id ? null : id); sounds.uiClick() }
 
