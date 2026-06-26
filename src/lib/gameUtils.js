@@ -53,23 +53,23 @@ export function assignRoles(players, hasThief = false) {
 
 // ── Vérifie la condition de victoire ──
 export function checkVictory(players) {
-  const alive = players.filter(p => p.is_alive && !p.is_mj)
+  // Tous les joueurs vivants, MJ inclus (il joue un rôle)
+  const alive = players.filter(p => p.is_alive)
   const aliveWolves = alive.filter(p => p.role === 'werewolf')
   const aliveVillagers = alive.filter(p => p.role !== 'werewolf')
 
-  // Victoire des loups : autant (ou plus) de loups que de villageois
-  if (aliveWolves.length >= aliveVillagers.length) {
-    return 'werewolves'
-  }
-
-  // Victoire du village : plus de loups
+  // Victoire du village : plus aucun loup en vie
   if (aliveWolves.length === 0) {
-    // Vérifier victoire amants (si les deux seuls survivants sont amants)
     const lovers = alive.filter(p => p.is_lover)
     if (lovers.length === 2 && alive.length === 2) {
       return 'lovers'
     }
     return 'village'
+  }
+
+  // Victoire des loups : plus de loups que de villageois
+  if (aliveWolves.length > aliveVillagers.length) {
+    return 'werewolves'
   }
 
   return null // partie continue
