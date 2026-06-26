@@ -1,8 +1,24 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ROLES, PHASES } from '../../lib/constants'
 import { Button } from '../ui/Button'
 import { sounds } from '../../lib/sounds'
 import { supabase } from '../../lib/supabase'
+
+function RoleImage({ role, className = '' }) {
+  const [imgError, setImgError] = React.useState(false)
+  if (role.image && !imgError) {
+    return (
+      <div className={`flex items-center justify-center ${className}`}>
+        <img
+          src={role.image}
+          className="w-full h-full object-contain drop-shadow-lg"
+          onError={() => setImgError(true)}
+        />
+      </div>
+    )
+  }
+  return <div className={`flex items-center justify-center text-8xl ${className}`}>{role.emoji}</div>
+}
 
 export function RoleRevealScreen({ game, currentPlayer, players = [] }) {
   const [flipped, setFlipped] = useState(false)
@@ -116,13 +132,7 @@ export function RoleRevealScreen({ game, currentPlayer, players = [] }) {
                   style={{ background: `${role.color}30`, color: role.colorLight }}>
                   {role.camp === 'werewolves' ? 'Camp des Loups' : 'Camp du Village'}
                 </div>
-                <div className="w-36 h-36 animate-float flex items-center justify-center">
-                  {role.image
-                    ? <img src={role.image} className="w-full h-full object-contain drop-shadow-lg" onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='block' }} />
-                    : null
-                  }
-                  <span className="text-8xl" style={{ display: role.image ? 'none' : 'block' }}>{role.emoji}</span>
-                </div>
+                <RoleImage role={role} className="w-36 h-36 animate-float" />
                 <h2 className="font-display font-black text-3xl tracking-wide"
                   style={{ color: role.colorLight, textShadow: `0 0 20px ${role.color}` }}>
                   {role.name}
