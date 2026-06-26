@@ -43,8 +43,7 @@ export function RoleRevealScreen({ game, currentPlayer, players = [] }) {
     setFlipped(true)
     setTimeout(() => {
       setRevealed(true)
-      if (isWolf) sounds.wolfReveal()
-      else sounds.roleReveal()
+      // Pas de son au retournement — évite de trahir le rôle
     }, 400)
   }
 
@@ -117,12 +116,7 @@ export function RoleRevealScreen({ game, currentPlayer, players = [] }) {
                   style={{ background: `${role.color}30`, color: role.colorLight }}>
                   {role.camp === 'werewolves' ? 'Camp des Loups' : 'Camp du Village'}
                 </div>
-                <div className="w-36 h-36 animate-float flex items-center justify-center">
-  {role.image
-    ? <img src={role.image} className="w-full h-full object-contain drop-shadow-lg" />
-    : <span className="text-8xl">{role.emoji}</span>
-  }
-</div>
+                <div className="text-8xl animate-float">{role.emoji}</div>
                 <h2 className="font-display font-black text-3xl tracking-wide"
                   style={{ color: role.colorLight, textShadow: `0 0 20px ${role.color}` }}>
                   {role.name}
