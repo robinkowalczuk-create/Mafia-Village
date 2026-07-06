@@ -10,19 +10,26 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
   const [actionDone, setActionDone] = useState(false)
   const [witchMode, setWitchMode] = useState(null)
   const [spying, setSpying] = useState(false)
-  const advancedRef = useRef(false)
+
+  // FIX #2 — clé unique par nuit pour éviter le blocage inter-nuits
+  const advancedKey = useRef(null)
 
   const role = ROLES[currentPlayer?.role] || ROLES.villager
   const myRoleId = currentPlayer?.role
   const alivePlayers = players.filter(p => p.is_alive && p.id !== currentPlayer?.id)
   const aliveWolves = players.filter(p => p.is_alive && p.role === 'werewolf' && p.id !== currentPlayer?.id)
 
-  // Victime actuelle des loups (pour la sorcière)
   const nightKillActions = actions.filter(a => a.action_type === 'werewolf_kill')
   const nightKillTargetId = nightKillActions[0]?.target_id
   const nightKillPlayer = players.find(p => p.id === nightKillTargetId)
 
-  const hasNightAction = role.nightAction && role.nightAction !== 'spy'
+  // FIX #4 — sorcière sans potions n'est plus un acteur nocturne
+  const witchIsActive = myRoleId === 'witch' &&
+    (!currentPlayer?.witch_heal_used || !currentPlayer?.witch_poison_used)
+
+  const hasNightAction = role.nightAction &&
+    role.nightAction !== 'spy' &&
+    !(myRoleId === 'witch' && currentPlayer?.witch_heal_used && currentPlayer?.witch_poison_used)
 
   // Check si déjà joué
   useEffect(() => {
@@ -31,15 +38,23 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
     if (myAction) setActionDone(true)
   }, [actions, currentPlayer?.id])
 
-  // Auto-advance — re-fetch depuis Supabase pour éviter les états figés
+  // FIX #2 + #8 — auto-advance avec clé par nuit, seul premier joueur déclenche
   useEffect(() => {
     if (!game?.id || game.current_phase !== PHASES.NIGHT) return
     if (!players.length) return
 
-    const checkAndAdvance = async () => {
-      if (advancedRef.current) return
+    const nightKey = `${game.id}_${game.phase_number}`
 
-      // Re-fetch les actions directement depuis Supabase
+    // FIX #8 — seul le premier joueur dans l'ordre déclenche l'update
+    const sorted = [...players].filter(p => p.is_alive).sort((a, b) =>
+      a.joined_at > b.joined_at ? 1 : -1
+    )
+    if (sorted[0]?.id !== currentPlayer?.id) return
+
+    const checkAndAdvance = async () => {
+      // FIX #2 — vérifier la clé au moment de l'exécution
+      if (advancedKey.current === nightKey) return
+
       const { data: freshActions } = await supabase
         .from('mv_actions')
         .select('*')
@@ -48,15 +63,18 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
 
       if (!freshActions) return
 
-      const nightActors = players.filter(p =>
-        p.is_alive &&
-        ROLES[p.role]?.nightAction &&
-        ROLES[p.role]?.nightAction !== 'spy'
-      )
+      // FIX #4 — exclure la sorcière si ses potions sont épuisées
+      const nightActors = players.filter(p => {
+        if (!p.is_alive) return false
+        const r = ROLES[p.role]
+        if (!r?.nightAction || r.nightAction === 'spy') return false
+        // Sorcière sans potions → pas acteur
+        if (p.role === 'witch' && p.witch_heal_used && p.witch_poison_used) return false
+        return true
+      })
 
-      // Pas d'acteurs nocturnes (ex: 2 joueurs villageois+loup, seul le loup agit)
       if (!nightActors.length) {
-        advancedRef.current = true
+        advancedKey.current = nightKey
         await supabase.from('mv_games').update({
           current_phase: PHASES.NIGHT_RESOLUTION,
           night_kills: [],
@@ -66,9 +84,9 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
 
       const doneIds = freshActions.map(a => a.player_id)
       const allDone = nightActors.every(p => doneIds.includes(p.id))
-
       if (!allDone) return
-      advancedRef.current = true
+
+      advancedKey.current = nightKey
 
       const killActions    = freshActions.filter(a => a.action_type === 'werewolf_kill')
       const healActions    = freshActions.filter(a => a.action_type === 'witch_heal')
@@ -139,7 +157,9 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
   }
 
   const inspectedPlayer = actionDone
-    ? players.find(p => p.id === actions.find(a => a.player_id === currentPlayer?.id && a.action_type === 'seer_inspect')?.target_id)
+    ? players.find(p => p.id === actions.find(a =>
+        a.player_id === currentPlayer?.id && a.action_type === 'seer_inspect'
+      )?.target_id)
     : null
 
   return (
@@ -150,12 +170,10 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
 
       <div className="relative z-10 flex flex-col flex-1 px-5 py-8 gap-5">
 
-        {/* Header avec numéro de nuit */}
+        {/* Header */}
         <div className="text-center pt-4">
           <div className="text-4xl mb-2">🌙</div>
-          <h1 className="font-display font-black text-2xl text-gold">
-            Nuit {game.phase_number}
-          </h1>
+          <h1 className="font-display font-black text-2xl text-gold">Nuit {game.phase_number}</h1>
           <div className="flex items-center justify-center gap-2 mt-2">
             <div className="flex items-center gap-2 px-4 py-1.5 rounded-full"
               style={{ background: `${role.color}20`, border: `1px solid ${role.color}40` }}>
@@ -165,32 +183,31 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
           </div>
         </div>
 
-        {/* === ACTION DONE — attente === */}
+        {/* Action done — attente */}
         {actionDone && myRoleId !== 'seer' && (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 animate-fade-in">
             <div className="text-5xl animate-float opacity-60">✓</div>
             <p className="text-parchment-dim text-sm font-body text-center">
-              Action enregistrée.<br />En attente des autres joueurs...
+              Action enregistrée.<br/>En attente des autres joueurs...
             </p>
           </div>
         )}
 
-        {/* === PASSIF (villageois, chasseur, idiot) === */}
+        {/* Passif */}
         {!actionDone && !hasNightAction && (
           <div className="flex-1 flex flex-col items-center justify-center gap-4">
             <div className="text-6xl animate-float opacity-30">😴</div>
             <p className="text-parchment-dim text-sm font-body text-center max-w-xs">
-              Votre rôle n'agit pas la nuit.<br/>Restez silencieux.
+              {myRoleId === 'witch'
+                ? 'Vos deux potions sont épuisées. Reposez-vous.'
+                : 'Votre rôle n\'agit pas la nuit. Restez silencieux.'
+              }
             </p>
             {myRoleId === 'littlegirl' && (
               <div className="card-dark p-4 max-w-xs text-center">
-                <p className="text-parchment-dim text-xs font-body mb-3">
-                  Osez-vous espionner les loups ?
-                </p>
-                <button
-                  className="text-gold text-sm font-display border border-gold/30 rounded-xl px-4 py-2 active:scale-95"
-                  onClick={() => { setSpying(true); sounds.uiClick() }}
-                >
+                <p className="text-parchment-dim text-xs font-body mb-3">Osez-vous espionner les loups ?</p>
+                <button className="text-gold text-sm font-display border border-gold/30 rounded-xl px-4 py-2 active:scale-95"
+                  onClick={() => { setSpying(true); sounds.uiClick() }}>
                   👁️ J'espionne
                 </button>
               </div>
@@ -208,7 +225,7 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
           </div>
         )}
 
-        {/* === LOUP-GAROU === */}
+        {/* LOUP-GAROU */}
         {myRoleId === 'werewolf' && !actionDone && (
           <div className="flex flex-col gap-4 flex-1">
             {aliveWolves.length > 0 && (
@@ -235,13 +252,11 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
               ))}
             </div>
             <button onClick={handleSubmitWolf} disabled={!selectedTarget}
-              className="btn-danger w-full disabled:opacity-30">
-              🐺 Confirmer la victime
-            </button>
+              className="btn-danger w-full disabled:opacity-30">🐺 Confirmer la victime</button>
           </div>
         )}
 
-        {/* === VOYANTE === */}
+        {/* VOYANTE */}
         {myRoleId === 'seer' && !actionDone && currentPlayer?.is_alive && (
           <div className="flex flex-col gap-4 flex-1">
             <p className="text-parchment-dim text-xs text-center font-body">Choisissez un joueur à inspecter</p>
@@ -256,26 +271,21 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
               ))}
             </div>
             <button onClick={handleSubmitSeer} disabled={!selectedTarget}
-              className="btn-primary w-full disabled:opacity-30">
-              🔮 Inspecter
-            </button>
+              className="btn-primary w-full disabled:opacity-30">🔮 Inspecter</button>
           </div>
         )}
 
-        {/* Résultat voyante — carte flip révélant le camp */}
+        {/* Résultat voyante */}
         {myRoleId === 'seer' && actionDone && (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 animate-fade-in">
             {inspectedPlayer ? (
               <div className="w-full max-w-xs">
                 <p className="text-parchment-dim text-xs text-center font-body mb-4">Vision révélée</p>
-                <div
-                  className="rounded-3xl p-6 flex flex-col items-center gap-4 border animate-glow-in"
+                <div className="rounded-3xl p-6 flex flex-col items-center gap-4 border animate-glow-in"
                   style={{
                     background: `linear-gradient(160deg, ${inspectedPlayer.role === 'werewolf' ? '#8B1A1A' : '#2E5E4E'}30, #0A0A14)`,
                     borderColor: inspectedPlayer.role === 'werewolf' ? '#8B1A1A60' : '#2E5E4E60',
-                    boxShadow: `0 0 40px ${inspectedPlayer.role === 'werewolf' ? '#8B1A1A' : '#2E5E4E'}25`,
-                  }}
-                >
+                  }}>
                   <div className="text-6xl animate-float">
                     {inspectedPlayer.role === 'werewolf' ? '🐺' : '☀️'}
                   </div>
@@ -299,23 +309,22 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
           </div>
         )}
 
-        {/* === SORCIÈRE === */}
-        {myRoleId === 'witch' && !actionDone && currentPlayer?.is_alive && (
+        {/* SORCIÈRE */}
+        {myRoleId === 'witch' && !actionDone && currentPlayer?.is_alive && witchIsActive && (
           <div className="flex flex-col gap-4 flex-1">
             {!witchMode && (
               <>
-                {/* Victime des loups */}
-                <div className="card-dark border-blood/20 p-4 text-center">
-                  <p className="text-blood-light text-xs uppercase tracking-wider font-body mb-1">Victime des loups cette nuit</p>
-                  {nightKillPlayer ? (
-                    <p className="text-parchment font-display text-xl">{nightKillPlayer.name}</p>
-                  ) : (
-                    <p className="text-parchment-dim text-sm font-body">
-                      {nightKillActions.length === 0 ? 'En attente du vote des loups...' : 'Personne (les loups n\'ont pas tué)'}
-                    </p>
-                  )}
-                </div>
-
+                {!currentPlayer.witch_heal_used && (
+                  <div className="card-dark border-blood/20 p-4 text-center">
+                    <p className="text-blood-light text-xs uppercase tracking-wider font-body mb-1">Victime des loups cette nuit</p>
+                    {nightKillPlayer
+                      ? <p className="text-parchment font-display text-xl">{nightKillPlayer.name}</p>
+                      : <p className="text-parchment-dim text-sm font-body">
+                          {nightKillActions.length === 0 ? 'En attente du vote des loups...' : 'Personne'}
+                        </p>
+                    }
+                  </div>
+                )}
                 <div className="flex flex-col gap-3">
                   {!currentPlayer.witch_heal_used && nightKillTargetId && (
                     <button onClick={() => setWitchMode('heal')}
@@ -333,25 +342,23 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
                   )}
                   <button onClick={() => handleSubmitWitch('skip')}
                     className="card-dark p-4 text-center text-parchment-dim text-sm font-body active:scale-95">
-                    Passer (ne rien faire)
+                    Passer
                   </button>
                 </div>
               </>
             )}
-
             {witchMode === 'heal' && (
               <div className="flex flex-col gap-4 flex-1 items-center justify-center">
                 <p className="text-parchment-dim text-sm text-center font-body">
                   Soigner <strong className="text-parchment">{nightKillPlayer?.name}</strong> ?<br/>
-                  <span className="text-xs opacity-60">(Potion utilisable une seule fois)</span>
+                  <span className="text-xs opacity-60">(Une seule fois)</span>
                 </p>
                 <div className="flex gap-3">
-                  <button onClick={() => handleSubmitWitch('heal')} className="btn-primary px-6">Oui, soigner</button>
-                  <button onClick={() => setWitchMode(null)} className="btn-ghost px-6">Annuler</button>
+                  <button onClick={() => handleSubmitWitch('heal')} className="btn-primary px-6">Oui</button>
+                  <button onClick={() => setWitchMode(null)} className="btn-ghost px-6">Non</button>
                 </div>
               </div>
             )}
-
             {witchMode === 'poison' && (
               <div className="flex flex-col gap-4 flex-1">
                 <p className="text-parchment-dim text-xs text-center font-body">Choisissez la cible du poison</p>
@@ -374,7 +381,7 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
           </div>
         )}
 
-        {/* === GARDE DU CORPS === */}
+        {/* GARDE DU CORPS */}
         {myRoleId === 'bodyguard' && !actionDone && (
           <div className="flex flex-col gap-4 flex-1">
             <p className="text-parchment-dim text-xs text-center font-body">Choisissez qui vous protégez cette nuit</p>
@@ -392,10 +399,10 @@ export function NightScreen({ game, currentPlayer, players = [] }) {
           </div>
         )}
 
-        {/* === CUPIDON === */}
+        {/* CUPIDON */}
         {myRoleId === 'cupid' && !actionDone && (
           <div className="flex flex-col gap-4 flex-1">
-            <p className="text-parchment-dim text-xs text-center font-body">Désignez un amant — l'autre joueur désigné sera l'amant de votre choix</p>
+            <p className="text-parchment-dim text-xs text-center font-body">Désignez un amant</p>
             <div className="flex flex-col gap-2 overflow-y-auto flex-1">
               {alivePlayers.map(p => (
                 <button key={p.id} onClick={() => handleTarget(p.id)}

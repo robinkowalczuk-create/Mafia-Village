@@ -2,7 +2,7 @@ import { ROLE_COMPOSITIONS, ROLES, PHASES } from './constants.js'
 
 // ── Génère un code de room 4 lettres majuscules ──
 export function generateRoomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ' // sans I et O pour éviter confusions
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
   return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
 }
 
@@ -20,23 +20,15 @@ export function shuffle(array) {
 export function generateRoles(playerCount, hasThief = false) {
   const composition = ROLE_COMPOSITIONS[playerCount]
   if (!composition) throw new Error(`Pas de composition définie pour ${playerCount} joueurs`)
-
   const roles = []
   for (const [roleId, count] of Object.entries(composition)) {
-    for (let i = 0; i < count; i++) {
-      roles.push(roleId)
-    }
+    for (let i = 0; i < count; i++) roles.push(roleId)
   }
-
-  // Si le Voleur est activé, ajouter 2 cartes bonus dans le deck et le rôle Voleur
   if (hasThief && playerCount >= 6) {
-    // Ajouter 2 villageois en réserve (le voleur les verra pour choisir)
     roles.push('villager', 'villager')
-    // Remplacer un villageois par le Voleur
     const villagerIdx = roles.indexOf('villager')
     if (villagerIdx !== -1) roles[villagerIdx] = 'thief'
   }
-
   return shuffle(roles)
 }
 
@@ -44,69 +36,47 @@ export function generateRoles(playerCount, hasThief = false) {
 export function assignRoles(players, hasThief = false) {
   const playerCount = players.length
   const roles = generateRoles(playerCount, hasThief)
-
-  return players.map((player, i) => ({
-    ...player,
-    role: roles[i] || 'villager',
-  }))
+  return players.map((player, i) => ({ ...player, role: roles[i] || 'villager' }))
 }
 
 // ── Vérifie la condition de victoire ──
 export function checkVictory(players) {
-  // Tous les joueurs vivants, MJ inclus (il joue un rôle)
   const alive = players.filter(p => p.is_alive)
   const aliveWolves = alive.filter(p => p.role === 'werewolf')
   const aliveVillagers = alive.filter(p => p.role !== 'werewolf')
 
-  // Victoire du village : plus aucun loup en vie
   if (aliveWolves.length === 0) {
     const lovers = alive.filter(p => p.is_lover)
-    if (lovers.length === 2 && alive.length === 2) {
-      return 'lovers'
-    }
+    if (lovers.length === 2 && alive.length === 2) return 'lovers'
     return 'village'
   }
-
-  // Victoire des loups : plus de loups que de villageois
-  if (aliveWolves.length > aliveVillagers.length) {
-    return 'werewolves'
-  }
-
-  return null // partie continue
+  if (aliveWolves.length > aliveVillagers.length) return 'werewolves'
+  return null
 }
 
-// ── Calcule les résultats du vote ──
+// ── FIX #5 — Calcule les résultats du vote (algo corrigé) ──
 export function tallyVotes(votes, players) {
   const counts = {}
   for (const vote of votes) {
     counts[vote.target_id] = (counts[vote.target_id] || 0) + 1
   }
 
-  let maxVotes = 0
-  let eliminated = null
-
-  for (const [playerId, count] of Object.entries(counts)) {
-    if (count > maxVotes) {
-      maxVotes = count
-      eliminated = playerId
-    } else if (count === maxVotes) {
-      // Égalité → pas d'élimination
-      eliminated = null
-    }
+  if (Object.keys(counts).length === 0) {
+    return { counts, eliminated: null, isTie: false }
   }
 
-  const eliminatedPlayer = eliminated
-    ? players.find(p => p.id === eliminated)
-    : null
+  const maxVotes = Math.max(...Object.values(counts))
+  const leaders = Object.entries(counts).filter(([, c]) => c === maxVotes)
 
-  return {
-    counts,
-    eliminated: eliminatedPlayer,
-    isTie: eliminated === null && Object.keys(counts).length > 0,
+  // Égalité si plusieurs joueurs ont le même nombre max de votes
+  if (leaders.length > 1) {
+    return { counts, eliminated: null, isTie: true }
   }
+
+  const eliminatedPlayer = players.find(p => p.id === leaders[0][0]) || null
+  return { counts, eliminated: eliminatedPlayer, isTie: false }
 }
 
-// ── Ordonne les joueurs par ordre d'éveil nocturne ──
 export function sortByWakeOrder(players) {
   return [...players].sort((a, b) => {
     const aOrder = ROLES[a.role]?.wakeOrder ?? 99
@@ -115,39 +85,12 @@ export function sortByWakeOrder(players) {
   })
 }
 
-// ── Formate le temps restant ──
 export function formatTime(seconds) {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `${s}s`
 }
 
-// ── Calcule la phase suivante ──
-export function getNextPhase(currentPhase, phaseNumber, game) {
-  switch (currentPhase) {
-    case PHASES.LOBBY:
-      return { phase: PHASES.ROLE_REVEAL, phaseNumber }
-    case PHASES.ROLE_REVEAL:
-      // Si Voleur dans la partie, passer au tour du Voleur d'abord
-      return { phase: PHASES.NIGHT, phaseNumber: 1 }
-    case PHASES.NIGHT:
-      return { phase: PHASES.NIGHT_RESOLUTION, phaseNumber }
-    case PHASES.NIGHT_RESOLUTION:
-      return { phase: PHASES.DAY, phaseNumber }
-    case PHASES.DAY:
-      return { phase: PHASES.VOTE, phaseNumber }
-    case PHASES.VOTE:
-      return { phase: PHASES.ELIMINATION, phaseNumber }
-    case PHASES.ELIMINATION:
-      return { phase: PHASES.NIGHT, phaseNumber: phaseNumber + 1 }
-    case PHASES.HUNTER_SHOT:
-      return { phase: PHASES.NIGHT, phaseNumber: phaseNumber + 1 }
-    default:
-      return { phase: currentPhase, phaseNumber }
-  }
-}
-
-// ── Génère un ID de session local ──
 export function getOrCreatePlayerId() {
   let id = sessionStorage.getItem('mafia_player_id')
   if (!id) {

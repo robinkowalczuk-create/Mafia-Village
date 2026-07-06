@@ -29,7 +29,7 @@ export function DayScreen({ game, currentPlayer, players = [] }) {
   const [deathPhase, setDeathPhase] = useState('suspense')
   const [cardFlipped, setCardFlipped] = useState(false)
   const [currentDeathIndex, setCurrentDeathIndex] = useState(0)
-  const appliedRef = useRef(false)
+  const appliedKey = useRef(null) // FIX #3 — clé par nuit
 
   const nightKills = game.night_kills || []
   const deadPlayers = players.filter(p => nightKills.includes(p.id))
@@ -38,14 +38,17 @@ export function DayScreen({ game, currentPlayer, players = [] }) {
   // ── Appliquer les morts (un seul joueur le fait : le premier dans la liste) ──
   useEffect(() => {
     if (game.current_phase !== PHASES.NIGHT_RESOLUTION) return
-    if (!players.length || appliedRef.current) return
+    if (!players.length) return
+
+    const killKey = `${game.id}_${game.phase_number}`
+    if (appliedKey.current === killKey) return
 
     // Seul le premier joueur vivant dans l'ordre déclenche l'update
     const sortedAlive = [...players].sort((a, b) => a.joined_at > b.joined_at ? 1 : -1)
     const isFirst = sortedAlive[0]?.id === currentPlayer?.id
     if (!isFirst) return
 
-    appliedRef.current = true
+    appliedKey.current = killKey
 
     const applyKills = async () => {
       for (const killId of nightKills) {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useVotes } from '../../hooks/useVotes'
 import { CountdownTimer } from '../ui/CountdownTimer'
 import { tallyVotes } from '../../lib/gameUtils'
@@ -10,12 +10,13 @@ export function VoteScreen({ game, currentPlayer, players = [] }) {
   const { votes, castVote } = useVotes(game.id, game.phase_number)
   const [myVote, setMyVote] = useState(null)
   const [timerRunning, setTimerRunning] = useState(true)
+  const resolvedRef = useRef(false) // FIX #1 — empêche double résolution
 
+  // FIX #6 — exclure les loups des cibles de vote pour les loups
   const alivePlayers = players.filter(p => p.is_alive && p.id !== currentPlayer?.id)
   const canVote = currentPlayer?.is_alive && !currentPlayer?.idiot_voted_out
   const { counts, eliminated, isTie } = tallyVotes(votes, players)
 
-  // Check if I already voted
   useEffect(() => {
     const existing = votes.find(v => v.voter_id === currentPlayer?.id)
     if (existing) setMyVote(existing.target_id)
@@ -28,14 +29,23 @@ export function VoteScreen({ game, currentPlayer, players = [] }) {
     await castVote(currentPlayer.id, targetId)
   }
 
-  const resolveVote = useCallback(async () => {
+  // FIX #1 — resolveVote avec ref pour éviter double déclenchement
+  const resolveVote = async () => {
+    if (resolvedRef.current) return
+    resolvedRef.current = true
     setTimerRunning(false)
     sounds.elimination()
 
-    const { counts, eliminated, isTie } = tallyVotes(votes, players)
+    // Re-fetch les votes depuis Supabase pour avoir l'état exact
+    const { data: freshVotes } = await supabase
+      .from('mv_votes')
+      .select('*')
+      .eq('game_id', game.id)
+      .eq('phase_number', game.phase_number)
+
+    const { eliminated, isTie } = tallyVotes(freshVotes || votes, players)
 
     if (isTie || !eliminated) {
-      // Égalité : pas d'élimination
       await supabase.from('mv_games').update({
         current_phase: PHASES.ELIMINATION,
         eliminated_player_id: null,
@@ -55,7 +65,7 @@ export function VoteScreen({ game, currentPlayer, players = [] }) {
       return
     }
 
-    // Chasseur éliminé : activer son pouvoir
+    // Chasseur éliminé
     if (eliminated.role === 'hunter' && !eliminated.hunter_shot_used) {
       await supabase.from('mv_players').update({ is_alive: false }).eq('id', eliminated.id)
       await supabase.from('mv_games').update({
@@ -65,38 +75,38 @@ export function VoteScreen({ game, currentPlayer, players = [] }) {
       return
     }
 
-    // Élimination normale → séquence dramatique dans EliminationScreen
-    // La victoire est vérifiée là-bas, après la révélation de carte
+    // Élimination normale
     await supabase.from('mv_players').update({ is_alive: false }).eq('id', eliminated.id)
     await supabase.from('mv_games').update({
       current_phase: PHASES.ELIMINATION,
       eliminated_player_id: eliminated.id,
       vote_tie: false,
     }).eq('id', game.id)
-  }, [votes, players, game.id])
+  }
 
-  // Tally when all alive players have voted OR timer expires
+  // FIX #1 — déclenchement unique via ref, seul le premier joueur résout
   const aliveVoters = players.filter(p => p.is_alive && !p.idiot_voted_out)
   const allVoted = votes.length >= aliveVoters.length && aliveVoters.length > 0
 
   useEffect(() => {
-    if (allVoted && timerRunning) resolveVote()
-  }, [allVoted, timerRunning, resolveVote])
+    if (!allVoted || resolvedRef.current) return
+    // Seul le premier joueur dans l'ordre résout le vote
+    const sorted = [...aliveVoters].sort((a, b) => a.joined_at > b.joined_at ? 1 : -1)
+    if (sorted[0]?.id === currentPlayer?.id) {
+      resolveVote()
+    }
+  }, [allVoted])
 
-  // Max vote count for bar widths
   const maxCount = Math.max(...Object.values(counts), 1)
 
   return (
     <div className="screen flex flex-col">
       <div className="stars-bg" />
-      <div
-        className="absolute inset-0 opacity-10"
-        style={{ background: 'radial-gradient(ellipse at center, #8B1A1A 0%, transparent 70%)' }}
-      />
+      <div className="absolute inset-0 opacity-10"
+        style={{ background: 'radial-gradient(ellipse at center, #8B1A1A 0%, transparent 70%)' }} />
 
       <div className="relative z-10 flex flex-col flex-1 px-5 py-8 gap-5">
 
-        {/* Header + Timer */}
         <div className="flex flex-col items-center gap-4 pt-4">
           <div className="text-4xl">⚖️</div>
           <h1 className="font-display font-black text-2xl text-gold">Vote d'élimination</h1>
@@ -107,22 +117,19 @@ export function VoteScreen({ game, currentPlayer, players = [] }) {
           />
         </div>
 
-        {/* Vote progress */}
         <div className="card-dark p-3 flex items-center justify-between">
           <span className="text-parchment-dim text-xs font-body">
             {votes.length} / {aliveVoters.length} votes
           </span>
           <div className="flex gap-1">
-            {aliveVoters.map((p, i) => (
-              <div
-                key={p.id}
+            {aliveVoters.map((p) => (
+              <div key={p.id}
                 className={`w-2 h-2 rounded-full transition-colors ${votes.find(v => v.voter_id === p.id) ? 'bg-gold' : 'bg-white/15'}`}
               />
             ))}
           </div>
         </div>
 
-        {/* My vote / Player list */}
         {canVote ? (
           <div className="flex flex-col gap-2 overflow-y-auto flex-1">
             <p className="text-parchment-dim text-xs uppercase tracking-wider font-body">
@@ -132,40 +139,22 @@ export function VoteScreen({ game, currentPlayer, players = [] }) {
               const voteCount = counts[p.id] || 0
               const isMyVote = myVote === p.id
               const pct = (voteCount / maxCount) * 100
-
               return (
-                <button
-                  key={p.id}
-                  onClick={() => handleVote(p.id)}
-                  className={`
-                    relative card-dark px-4 py-3 flex items-center gap-3 text-left overflow-hidden
-                    active:scale-98 transition-all duration-200
-                    ${isMyVote ? 'border-blood/60' : ''}
-                  `}
-                >
-                  {/* Vote bar background */}
-                  <div
-                    className="absolute inset-0 bg-blood/15 transition-all duration-500"
-                    style={{ width: `${pct}%` }}
-                  />
-
+                <button key={p.id} onClick={() => handleVote(p.id)}
+                  className={`relative card-dark px-4 py-3 flex items-center gap-3 text-left overflow-hidden active:scale-98 transition-all duration-200 ${isMyVote ? 'border-blood/60' : ''}`}>
+                  <div className="absolute inset-0 bg-blood/15 transition-all duration-500"
+                    style={{ width: `${pct}%` }} />
                   <div className="relative flex items-center gap-3 flex-1">
-                    <div className={`
-                      w-8 h-8 rounded-full flex items-center justify-center text-sm font-display
-                      ${isMyVote ? 'bg-blood/30 text-blood-light' : 'bg-white/5 text-parchment-dim'}
-                    `}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-display ${isMyVote ? 'bg-blood/30 text-blood-light' : 'bg-white/5 text-parchment-dim'}`}>
                       {p.name[0]}
                     </div>
                     <span className={`font-body ${isMyVote ? 'text-parchment font-medium' : 'text-parchment-dim'}`}>
                       {p.name}
                     </span>
                   </div>
-
                   <div className="relative flex items-center gap-2">
                     {voteCount > 0 && (
-                      <span className="text-blood-light font-display font-bold text-sm">
-                        {voteCount}
-                      </span>
+                      <span className="text-blood-light font-display font-bold text-sm">{voteCount}</span>
                     )}
                     {isMyVote && <span className="text-blood-light">🗳️</span>}
                   </div>
@@ -179,11 +168,8 @@ export function VoteScreen({ game, currentPlayer, players = [] }) {
             <p className="text-parchment-dim text-sm font-body text-center">
               {!currentPlayer?.is_alive
                 ? 'Vous êtes éliminé(e). Observez en silence.'
-                : 'Vous ne pouvez pas voter (Idiot du Village).'
-              }
+                : 'Vous ne pouvez pas voter (Idiot du Village).'}
             </p>
-
-            {/* Still show live counts */}
             <div className="w-full max-w-xs flex flex-col gap-2">
               {alivePlayers.map(p => {
                 const count = counts[p.id] || 0

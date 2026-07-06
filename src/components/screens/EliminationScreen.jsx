@@ -25,15 +25,16 @@ export function EliminationScreen({ game, currentPlayer, players = [] }) {
   const role = eliminated ? ROLES[eliminated.role] : null
   const isEliminated = currentPlayer?.id === eliminatedId
 
-  // Calculer le gagnant dès qu'on a les joueurs — mais NE PAS encore l'appliquer
+  // Calculer le gagnant une seule fois quand on a les joueurs
   useEffect(() => {
     if (!eliminated || !players.length) return
+    if (winner !== null) return // FIX #11 — ne pas recalculer
     const updatedPlayers = players.map(p =>
       p.id === eliminatedId ? { ...p, is_alive: false } : p
     )
     const w = checkVictory(updatedPlayers)
     setWinner(w)
-  }, [players, eliminatedId])
+  }, [eliminated?.id, players.length])
 
   // Séquence dramatique
   useEffect(() => {
