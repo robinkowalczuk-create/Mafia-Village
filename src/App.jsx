@@ -105,8 +105,8 @@ export default function App() {
   const renderPhase = () => {
     switch (phase) {
       case PHASES.LOBBY:            return <LobbyScreen {...screenProps} onPlayAgain={handlePlayAgain} />
-      case PHASES.THIEF_TURN:       return <ThiefTurnScreen {...screenProps} />
       case PHASES.ROLE_REVEAL:      return <RoleRevealScreen {...screenProps} />
+      case PHASES.THIEF_TURN:       return <ThiefTurnScreen {...screenProps} />
       case PHASES.NIGHT:            return <NightScreen {...screenProps} />
       case PHASES.NIGHT_RESOLUTION:
       case PHASES.DAY:              return <DayScreen {...screenProps} />
