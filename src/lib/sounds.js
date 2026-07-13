@@ -6,8 +6,8 @@
 class SoundManager {
   constructor() {
     this.ctx = null
-    this.enabled = true
-    this.vibrationsEnabled = true
+    this.enabled = false
+    this.vibrationsEnabled = false
     this._init()
   }
 
