@@ -16,6 +16,7 @@ import { VoteScreen } from './components/screens/VoteScreen'
 import { EliminationScreen } from './components/screens/EliminationScreen'
 import { HunterShotScreen } from './components/screens/HunterShotScreen'
 import { VictoryScreen } from './components/screens/VictoryScreen'
+import { ThiefTurnScreen } from './components/screens/ThiefTurnScreen'
 import { PhaseOverlay } from './components/ui/PhaseOverlay'
 
 export default function App() {
@@ -28,11 +29,8 @@ export default function App() {
   const [vibroEnabled, setVibroEnabled] = useState(true)
 
   const { game, loading } = useGame(gameCode)
-
-  // ── UN SEUL usePlayers ici, passé en prop à tous les écrans ──
   const { players } = usePlayers(game?.id)
 
-  // Rehydrate au montage si session existante
   useEffect(() => {
     const rehydrate = async () => {
       const playerId = getOrCreatePlayerId()
@@ -48,14 +46,12 @@ export default function App() {
     rehydrate()
   }, [])
 
-  // Sync currentPlayer avec le realtime players
   useEffect(() => {
     if (!currentPlayer?.id || !players.length) return
     const updated = players.find(p => p.id === currentPlayer.id)
     if (updated) setCurrentPlayer(updated)
   }, [players])
 
-  // Overlay de transition de phase
   useEffect(() => {
     if (!game) return
     const phase = game.current_phase
@@ -64,7 +60,7 @@ export default function App() {
       if (overlayPhases.includes(phase) && prevPhase !== null) {
         setOverlayPhase(phase)
         setShowOverlay(true)
-        if (phase === PHASES.NIGHT) { /* narrator runs inside NightScreen */ }
+        if (phase === PHASES.NIGHT) sounds.nightFall()
         else if (phase === PHASES.VOTE) { sounds.voteStart(); narrator.voteCall() }
         else { sounds.phaseTransition(); if (phase === PHASES.DAY) narrator.dawn() }
       }
@@ -104,21 +100,20 @@ export default function App() {
   }
 
   const phase = game.current_phase
-
-  // Toutes les props communes
   const screenProps = { game, currentPlayer, players }
 
   const renderPhase = () => {
     switch (phase) {
-      case PHASES.LOBBY:          return <LobbyScreen {...screenProps} onPlayAgain={handlePlayAgain} />
-      case PHASES.ROLE_REVEAL:    return <RoleRevealScreen {...screenProps} />
-      case PHASES.NIGHT:          return <NightScreen {...screenProps} />
+      case PHASES.LOBBY:            return <LobbyScreen {...screenProps} onPlayAgain={handlePlayAgain} />
+      case PHASES.THIEF_TURN:       return <ThiefTurnScreen {...screenProps} />
+      case PHASES.ROLE_REVEAL:      return <RoleRevealScreen {...screenProps} />
+      case PHASES.NIGHT:            return <NightScreen {...screenProps} />
       case PHASES.NIGHT_RESOLUTION:
-      case PHASES.DAY:            return <DayScreen {...screenProps} />
-      case PHASES.VOTE:           return <VoteScreen {...screenProps} />
-      case PHASES.ELIMINATION:    return <EliminationScreen {...screenProps} />
-      case PHASES.HUNTER_SHOT:    return <HunterShotScreen {...screenProps} />
-      case PHASES.VICTORY:        return <VictoryScreen {...screenProps} onPlayAgain={handlePlayAgain} />
+      case PHASES.DAY:              return <DayScreen {...screenProps} />
+      case PHASES.VOTE:             return <VoteScreen {...screenProps} />
+      case PHASES.ELIMINATION:      return <EliminationScreen {...screenProps} />
+      case PHASES.HUNTER_SHOT:      return <HunterShotScreen {...screenProps} />
+      case PHASES.VICTORY:          return <VictoryScreen {...screenProps} onPlayAgain={handlePlayAgain} />
       default: return (
         <div className="screen flex items-center justify-center">
           <p className="text-parchment-dim font-body text-sm">Phase inconnue : {phase}</p>
@@ -141,11 +136,9 @@ export default function App() {
           </button>
         </div>
       )}
-
       {showOverlay && overlayPhase && (
         <PhaseOverlay phase={overlayPhase} onDone={() => { setShowOverlay(false); setOverlayPhase(null) }} />
       )}
-
       {renderPhase()}
     </>
   )
