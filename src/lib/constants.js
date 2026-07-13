@@ -2,13 +2,15 @@
 // RÔLES — Le Village de Grasse
 // ═══════════════════════════════════════════════════════
 
+import { ROLE_IMAGES } from './roleImages.js'
+
 export const ROLES = {
   villager: {
     id: 'villager',
     name: 'Habitant',
     camp: 'village',
     emoji: '🏡',
-    image: '/villager.png',  // upload villager.png à la racine du repo
+    image: ROLE_IMAGES.villager,
     color: '#2E5E4E',
     colorLight: '#3D7A64',
     bgGradient: 'from-forest/30 to-night',
@@ -22,11 +24,11 @@ export const ROLES = {
     name: 'Loup-Garou',
     camp: 'werewolves',
     emoji: '🐺',
-    image: '/werewolf.png',
+    image: ROLE_IMAGES.werewolf,
     color: '#8B1A1A',
     colorLight: '#B02020',
     bgGradient: 'from-blood/30 to-night',
-    description: 'Prédateur des collines de Grasse. Vous rôdez la nuit dans les champs de lavande pour dévorer un habitant.',
+    description: 'Prédateur des collines de Grasse. Vous rôdez la nuit pour dévorer un habitant.',
     nightAction: 'werewolf_kill',
     wakeOrder: 3,
     powers: ['Choisir une victime chaque nuit (consensus avec les autres loups)'],
@@ -36,11 +38,11 @@ export const ROLES = {
     name: 'Voyante',
     camp: 'village',
     emoji: '🔮',
-    image: '/seer.png',
+    image: ROLE_IMAGES.seer,
     color: '#6B4FA0',
     colorLight: '#8B6FC0',
     bgGradient: 'from-purple-900/30 to-night',
-    description: 'Herboriste mystique de Grasse. Chaque nuit, vos essences révèlent la véritable nature d\'un habitant.',
+    description: 'Herboriste mystique de Grasse. Chaque nuit, vos essences révèlent la nature d\'un habitant.',
     nightAction: 'seer_inspect',
     wakeOrder: 1,
     powers: ['Inspecter un habitant par nuit', 'Connaître son camp (village ou loups)'],
@@ -50,7 +52,7 @@ export const ROLES = {
     name: 'Sorcière',
     camp: 'village',
     emoji: '🧪',
-    image: '/witch.png',
+    image: ROLE_IMAGES.witch,
     color: '#4A7A8A',
     colorLight: '#5A9AAA',
     bgGradient: 'from-teal-900/30 to-night',
@@ -64,21 +66,21 @@ export const ROLES = {
     name: 'Chasseur',
     camp: 'village',
     emoji: '🏹',
-    image: '/hunter.png',
+    image: ROLE_IMAGES.hunter,
     color: '#7A5A2A',
     colorLight: '#9A7A3A',
     bgGradient: 'from-amber-900/30 to-night',
-    description: 'Garde des collines de Grasse. La mort ne vous prend pas seul — vous emportez un ennemi dans la tombe.',
+    description: 'Garde des collines de Grasse. La mort ne vous prend pas seul.',
     nightAction: null,
     wakeOrder: null,
-    powers: ['À l\'élimination : choisir un habitant à éliminer avec vous'],
+    powers: ['À l\'élimination : choisir un habitant à emporter avec vous'],
   },
   cupid: {
     id: 'cupid',
     name: 'Cupidon',
     camp: 'village',
     emoji: '💘',
-    image: '/cupid.png',
+    image: ROLE_IMAGES.cupid,
     color: '#A04060',
     colorLight: '#C05070',
     bgGradient: 'from-rose-900/30 to-night',
@@ -92,35 +94,35 @@ export const ROLES = {
     name: 'Petite Fille',
     camp: 'village',
     emoji: '👁️',
-    image: '/littlegirl.png',
+    image: ROLE_IMAGES.littlegirl,
     color: '#8A6A3A',
     colorLight: '#AA8A5A',
     bgGradient: 'from-yellow-900/30 to-night',
     description: 'Curieuse des ruelles de Grasse. Vous osez espionner les loups dans les collines la nuit.',
     nightAction: 'spy',
     wakeOrder: 3.5,
-    powers: ['Peut "jeter un œil" pendant la nuit des loups', 'Si surprise, elle est éliminée à leur place'],
+    powers: ['Peut espionner les loups pendant leur tour', 'Si surprise, elle est éliminée à leur place'],
   },
   thief: {
     id: 'thief',
     name: 'Voleur',
     camp: 'village',
     emoji: '🃏',
-    image: '/thief.png',
+    image: ROLE_IMAGES.thief,
     color: '#3A5A7A',
     colorLight: '#5A7A9A',
     bgGradient: 'from-blue-900/30 to-night',
-    description: 'Pickpocket des marchés de Grasse. Avant la partie, volez une identité parmi deux cartes cachées.',
+    description: 'Pickpocket des marchés de Grasse. La première nuit, échangez votre carte contre l\'une des deux non distribuées.',
     nightAction: 'thief_steal',
     wakeOrder: -1,
-    powers: ['Avant la 1ère nuit : choisir l\'un des 2 rôles non distribués'],
+    powers: ['Nuit 1 : voir les 2 cartes non distribuées et choisir d\'en prendre une'],
   },
   idiot: {
     id: 'idiot',
     name: 'Idiot du Village',
     camp: 'village',
     emoji: '🤡',
-    image: '/idiot.png',
+    image: ROLE_IMAGES.idiot,
     color: '#2E5E4E',
     colorLight: '#3D7A64',
     bgGradient: 'from-forest/20 to-night',
@@ -134,11 +136,11 @@ export const ROLES = {
     name: 'Garde du Corps',
     camp: 'village',
     emoji: '🛡️',
-    image: '/bodyguard.png',
+    image: ROLE_IMAGES.bodyguard,
     color: '#4A4A8A',
     colorLight: '#6A6AAA',
     bgGradient: 'from-indigo-900/30 to-night',
-    description: 'Protecteur des ruelles de Grasse. Chaque nuit, veillez sur un habitant — mais jamais deux fois de suite.',
+    description: 'Protecteur des ruelles de Grasse. Chaque nuit, veillez sur un habitant.',
     nightAction: 'bodyguard_protect',
     wakeOrder: 2,
     powers: ['Protéger un habitant par nuit', 'Ne peut pas protéger la même personne deux nuits consécutives'],
@@ -150,10 +152,8 @@ export const ROLES = {
 // ═══════════════════════════════════════════════════════
 
 export const ROLE_COMPOSITIONS = {
-  // ── Modes test ──
   2:  { villager: 1, werewolf: 1 },
   3:  { villager: 1, werewolf: 1, seer: 1 },
-  // ── Parties normales ──
   4:  { villager: 1, werewolf: 1, seer: 1, witch: 1 },
   5:  { villager: 2, werewolf: 1, seer: 1, witch: 1 },
   6:  { villager: 2, werewolf: 1, seer: 1, witch: 1, hunter: 1 },
@@ -176,7 +176,6 @@ export const PHASES = {
   LOBBY:            'lobby',
   ROLE_REVEAL:      'role_reveal',
   THIEF_TURN:       'thief_turn',
-  CUPID_TURN:       'cupid_turn',
   NIGHT:            'night',
   NIGHT_RESOLUTION: 'night_resolution',
   DAY:              'day',
@@ -186,16 +185,8 @@ export const PHASES = {
   VICTORY:          'victory',
 }
 
-export const PHASE_FLOW = [
-  PHASES.NIGHT,
-  PHASES.NIGHT_RESOLUTION,
-  PHASES.DAY,
-  PHASES.VOTE,
-  PHASES.ELIMINATION,
-]
-
 // ═══════════════════════════════════════════════════════
-// TEXTES NARRATIFS PAR PHASE — Grasse
+// TEXTES NARRATIFS — Grasse
 // ═══════════════════════════════════════════════════════
 
 export const PHASE_NARRATIVES = {
@@ -209,14 +200,14 @@ export const PHASE_NARRATIVES = {
   [PHASES.NIGHT_RESOLUTION]: {
     title: 'L\'Aube sur les collines',
     subtitle: 'Grasse s\'éveille...',
-    atmosphere: 'Les habitants ouvrent leurs volets, le cœur serré. La nuit a-t-elle frappé parmi eux ?',
+    atmosphere: 'Les habitants ouvrent leurs volets, le cœur serré.',
     bgColor: '#1A1020',
     accentColor: '#C8A96E',
   },
   [PHASES.DAY]: {
     title: 'Le Jour se lève',
     subtitle: 'Place du village — débattez.',
-    atmosphere: 'Sur la place de Grasse, les regards s\'affrontent. Qui ment ? Qui cache un loup ?',
+    atmosphere: 'Sur la place de Grasse, les regards s\'affrontent. Qui ment ?',
     bgColor: '#0A1A14',
     accentColor: '#C8A96E',
   },
@@ -230,15 +221,11 @@ export const PHASE_NARRATIVES = {
   [PHASES.ELIMINATION]: {
     title: 'L\'Élimination',
     subtitle: 'La foule a décidé.',
-    atmosphere: 'Un habitant de Grasse quitte le village pour toujours. Était-ce le bon choix ?',
+    atmosphere: 'Un habitant de Grasse quitte le village pour toujours.',
     bgColor: '#0A0A14',
     accentColor: '#8B1A1A',
   },
 }
-
-// ═══════════════════════════════════════════════════════
-// INSTRUCTIONS NOCTURNES
-// ═══════════════════════════════════════════════════════
 
 export const ROLE_NIGHT_INSTRUCTIONS = {
   villager:   'Fermez les yeux. Grasse a besoin de vous demain.',
@@ -248,14 +235,10 @@ export const ROLE_NIGHT_INSTRUCTIONS = {
   hunter:     'Fermez les yeux. Votre pouvoir s\'active à votre mort.',
   cupid:      'Ouvrez les yeux. Liez deux cœurs parmi les habitants.',
   littlegirl: 'Vous pouvez espionner les loups... mais attention.',
-  thief:      'Choisissez votre identité parmi les deux cartes cachées.',
+  thief:      'Ouvrez les yeux. Choisissez votre identité.',
   idiot:      'Fermez les yeux. Votre protection vient en plein jour.',
   bodyguard:  'Ouvrez les yeux. Qui protégez-vous cette nuit ?',
 }
-
-// ═══════════════════════════════════════════════════════
-// VICTOIRE
-// ═══════════════════════════════════════════════════════
 
 export const VICTORY_CONDITIONS = {
   werewolves: {
@@ -268,14 +251,14 @@ export const VICTORY_CONDITIONS = {
   village: {
     title: 'Grasse est sauvée !',
     subtitle: 'La lavande fleurit à nouveau.',
-    description: 'Les habitants ont réussi à chasser tous les loups des collines. La paix revient sur Grasse.',
+    description: 'Les habitants ont réussi à chasser tous les loups des collines.',
     color: '#2E5E4E',
     bgGradient: 'from-forest/40 via-night to-night',
   },
   lovers: {
     title: 'Les Amants ont gagné',
     subtitle: 'L\'amour triomphe sur les collines.',
-    description: 'Seuls les deux amants ont survécu. Leur amour a vaincu la haine qui rongeait Grasse.',
+    description: 'Seuls les deux amants ont survécu.',
     color: '#A04060',
     bgGradient: 'from-rose-900/40 via-night to-night',
   },
