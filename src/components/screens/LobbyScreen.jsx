@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { clearPlayerId } from '../../lib/gameUtils'
-import { PHASES, ROLE_COMPOSITIONS, ROLES } from '../../lib/constants'
+import { PHASES, ROLE_COMPOSITIONS } from '../../lib/constants'
 import { Button } from '../ui/Button'
 import { sounds } from '../../lib/sounds'
 
@@ -17,8 +17,6 @@ const EDITABLE_ROLES = [
   { id: 'idiot',      label: 'Idiot du Village', min: 0 },
   { id: 'thief',      label: 'Voleur',           min: 0, max: 1 },
 ]
-
-const BONUS_ROLES = EDITABLE_ROLES.filter(r => r.id !== 'thief')
 
 const ROLE_EMOJI = {
   villager: '🏡', werewolf: '🐺', seer: '🔮', witch: '🧪',
@@ -40,14 +38,12 @@ function compositionTotal(comp) {
 
 function hasThief(comp) { return (comp?.thief || 0) > 0 }
 
-function targetTotal(comp, playerCount) {
-  return playerCount + (hasThief(comp) ? 2 : 0)
-}
-
+// Si Voleur présent : total distribué aux joueurs = playerCount
+// Les 2 cartes bonus sont tirées du même pool mélangé et mises en réserve
 function isValidComposition(comp, playerCount) {
   if (!comp) return false
   return (
-    compositionTotal(comp) === targetTotal(comp, playerCount) &&
+    compositionTotal(comp) === playerCount &&
     (comp.werewolf || 0) >= 1 &&
     (comp.villager || 0) >= 1
   )
@@ -60,8 +56,6 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
   const [deleting, setDeleting] = useState(false)
   const [composition, setComposition] = useState(null)
   const [showEditor, setShowEditor] = useState(false)
-  const [bonusCards, setBonusCards] = useState(['villager', 'villager'])
-  const [showBonusEditor, setShowBonusEditor] = useState(false)
 
   const isMJ = currentPlayer?.is_mj
   const playerCount = players.length
@@ -69,9 +63,8 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
   const maxPlayers = 12
   const isTestMode = playerCount > 0 && playerCount < 4
   const thiefInGame = hasThief(composition)
-  const target = composition ? targetTotal(composition, playerCount) : playerCount
   const total = composition ? compositionTotal(composition) : 0
-  const remaining = target - total
+  const remaining = playerCount - total
   const canStart = playerCount >= minPlayers && playerCount <= maxPlayers &&
     composition && isValidComposition(composition, playerCount)
 
@@ -87,7 +80,6 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
   const resetComposition = () => {
     const def = buildDefaultComposition(playerCount)
     if (def) setComposition(def)
-    setBonusCards(['villager', 'villager'])
   }
 
   const adjustRole = (roleId, delta) => {
@@ -98,15 +90,9 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
       const maxVal = r?.max ?? 99
       const newVal = Math.max(minVal, Math.min(maxVal, (next[roleId] || 0) + delta))
       const newComp = { ...next, [roleId]: newVal }
-      const newTotal = compositionTotal(newComp)
-      const newTarget = targetTotal(newComp, playerCount)
-      if (newTotal > newTarget) return prev
+      if (compositionTotal(newComp) > playerCount) return prev
       return newComp
     })
-  }
-
-  const setBonusCard = (index, roleId) => {
-    setBonusCards(prev => { const n = [...prev]; n[index] = roleId; return n })
   }
 
   const copyCode = () => {
@@ -120,22 +106,47 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
     if (!canStart || !isMJ) return
     setStarting(true)
     try {
+      // Construire le pool complet : rôles de la composition
       const roleList = []
       for (const [roleId, count] of Object.entries(composition)) {
         for (let i = 0; i < count; i++) roleList.push(roleId)
       }
-      const shuffled = [...roleList].sort(() => Math.random() - 0.5)
-      for (let i = 0; i < players.length; i++) {
-        await supabase.from('mv_players')
-          .update({ role: shuffled[i] })
-          .eq('id', players[i].id)
+
+      // Si Voleur présent : ajouter 2 cartes aléatoires supplémentaires au pool
+      // Ces 2 cartes seront les cartes bonus non distribuées
+      if (thiefInGame) {
+        // Piocher 2 rôles supplémentaires parmi tous les rôles non-voleur
+        const extraPool = ['villager', 'villager', 'seer', 'witch', 'hunter', 'werewolf']
+        const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
+        const bonus1 = pick(extraPool)
+        const bonus2 = pick(extraPool)
+        // Mélanger le pool complet (joueurs + 2 bonus)
+        const fullPool = [...roleList, bonus1, bonus2].sort(() => Math.random() - 0.5)
+        // Les N premiers vont aux joueurs, les 2 derniers sont les cartes réserve
+        const playerRoles = fullPool.slice(0, playerCount)
+        const bonusCards = fullPool.slice(playerCount)
+
+        for (let i = 0; i < players.length; i++) {
+          await supabase.from('mv_players').update({ role: playerRoles[i] }).eq('id', players[i].id)
+        }
+        await supabase.from('mv_games').update({
+          current_phase: PHASES.ROLE_REVEAL,
+          status: 'in_progress',
+          phase_number: 1,
+          thief_bonus_cards: bonusCards,
+        }).eq('id', game.id)
+      } else {
+        // Pas de Voleur : distribution normale
+        const shuffled = [...roleList].sort(() => Math.random() - 0.5)
+        for (let i = 0; i < players.length; i++) {
+          await supabase.from('mv_players').update({ role: shuffled[i] }).eq('id', players[i].id)
+        }
+        await supabase.from('mv_games').update({
+          current_phase: PHASES.ROLE_REVEAL,
+          status: 'in_progress',
+          phase_number: 1,
+        }).eq('id', game.id)
       }
-      await supabase.from('mv_games').update({
-        current_phase: thiefInGame ? PHASES.THIEF_TURN : PHASES.ROLE_REVEAL,
-        status: 'in_progress',
-        phase_number: 1,
-        thief_bonus_cards: thiefInGame ? bonusCards : null,
-      }).eq('id', game.id)
     } catch (e) { console.error(e) }
     finally { setStarting(false) }
   }
@@ -167,12 +178,9 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
 
         {/* Joueurs */}
         <div className="flex flex-col gap-2">
-          <p className="text-parchment-dim text-xs uppercase tracking-wider font-body">
-            Joueurs ({playerCount}/{maxPlayers})
-          </p>
+          <p className="text-parchment-dim text-xs uppercase tracking-wider font-body">Joueurs ({playerCount}/{maxPlayers})</p>
           {players.map((p) => (
-            <div key={p.id}
-              className={`card-dark flex items-center gap-3 px-4 py-3 ${p.id === currentPlayer?.id ? 'border-gold/30 bg-gold/5' : ''}`}>
+            <div key={p.id} className={`card-dark flex items-center gap-3 px-4 py-3 ${p.id === currentPlayer?.id ? 'border-gold/30 bg-gold/5' : ''}`}>
               <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-display font-bold ${p.is_mj ? 'bg-gold/20 text-gold' : 'bg-white/5 text-parchment-dim'}`}>
                 {p.name[0].toUpperCase()}
               </div>
@@ -206,7 +214,7 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
           <div className="card-dark p-4 flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <p className="text-parchment-dim text-xs uppercase tracking-wider font-body">
-                Composition · {playerCount} joueurs{thiefInGame && <span className="text-blue-300/60"> +2 bonus</span>}
+                Composition · {playerCount} joueurs
               </p>
               {isMJ && (
                 <div className="flex gap-2">
@@ -220,15 +228,12 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
               )}
             </div>
 
-            {/* Badges */}
             <div className="flex flex-wrap gap-2">
               {EDITABLE_ROLES.filter(r => (composition[r.id] || 0) > 0).map(r => (
-                <div key={r.id}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-body border ${
-                    r.id === 'werewolf' ? 'bg-blood/15 border-blood/30 text-blood-light'
-                    : r.id === 'thief' ? 'bg-blue-900/20 border-blue-500/30 text-blue-300'
-                    : 'bg-white/5 border-white/10 text-parchment-dim'
-                  }`}>
+                <div key={r.id} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-body border ${
+                  r.id === 'werewolf' ? 'bg-blood/15 border-blood/30 text-blood-light'
+                  : r.id === 'thief' ? 'bg-blue-900/20 border-blue-500/30 text-blue-300'
+                  : 'bg-white/5 border-white/10 text-parchment-dim'}`}>
                   <span>{ROLE_EMOJI[r.id]}</span>
                   <span className="font-bold">{composition[r.id]}</span>
                   <span>{r.label}</span>
@@ -236,21 +241,26 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
               ))}
             </div>
 
-            {/* Compteur */}
-            {isMJ && (
-              <div className={`text-xs font-body flex justify-between ${remaining !== 0 ? 'text-amber-400' : 'text-forest-light'}`}>
-                <span>Total : {total} / {target}{thiefInGame && ' (joueurs + 2 bonus)'}</span>
-                {remaining > 0 && <span>+{remaining} à distribuer</span>}
-                {remaining < 0 && <span>{Math.abs(remaining)} en trop</span>}
-                {remaining === 0 && <span>✓</span>}
+            {/* Note Voleur */}
+            {thiefInGame && (
+              <div className="card-dark border-blue-500/20 p-3 text-xs font-body text-blue-300/80">
+                🃏 Le Voleur recevra une carte normale. Lors de la 1ère nuit, il pourra échanger avec l'une des 2 cartes non distribuées.
               </div>
             )}
 
-            {/* Éditeur rôles */}
+            {isMJ && (
+              <div className={`text-xs font-body flex justify-between ${remaining !== 0 ? 'text-amber-400' : 'text-forest-light'}`}>
+                <span>Total : {total} / {playerCount}</span>
+                {remaining > 0 && <span>+{remaining} à distribuer</span>}
+                {remaining < 0 && <span>{Math.abs(remaining)} en trop</span>}
+                {remaining === 0 && <span>✓ Prêt</span>}
+              </div>
+            )}
+
             {isMJ && showEditor && (
               <div className="flex flex-col gap-3 border-t border-white/10 pt-4 animate-fade-up">
                 <p className="text-parchment-dim text-xs font-body text-center">
-                  Min. 1 loup · Min. 1 habitant · Total = {target}{thiefInGame && ' (joueurs + 2 bonus Voleur)'}
+                  Min. 1 loup · Min. 1 habitant · Total = {playerCount}
                 </p>
                 {EDITABLE_ROLES.map(r => {
                   const count = composition[r.id] || 0
@@ -258,11 +268,9 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
                     <div key={r.id} className="flex items-center gap-3">
                       <span className="text-xl w-7 text-center">{ROLE_EMOJI[r.id]}</span>
                       <div className="flex-1">
-                        <span className={`font-body text-sm ${count > 0 ? 'text-parchment' : 'text-parchment-dim/50'}`}>
-                          {r.label}
-                        </span>
+                        <span className={`font-body text-sm ${count > 0 ? 'text-parchment' : 'text-parchment-dim/50'}`}>{r.label}</span>
                         {r.id === 'thief' && count > 0 && (
-                          <p className="text-blue-300/60 text-xs font-body">Nécessite +2 cartes bonus</p>
+                          <p className="text-blue-300/60 text-xs font-body">+2 cartes aléatoires en réserve</p>
                         )}
                       </div>
                       <div className="flex items-center gap-3">
@@ -271,10 +279,9 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
                         <span className={`w-6 text-center font-display font-bold ${
                           r.id === 'werewolf' && count > 0 ? 'text-blood-light'
                           : r.id === 'thief' && count > 0 ? 'text-blue-300'
-                          : count > 0 ? 'text-gold' : 'text-parchment-dim/30'
-                        }`}>{count}</span>
+                          : count > 0 ? 'text-gold' : 'text-parchment-dim/30'}`}>{count}</span>
                         <button onClick={() => adjustRole(r.id, 1)}
-                          disabled={total >= target || (r.max !== undefined && count >= r.max)}
+                          disabled={total >= playerCount || (r.max !== undefined && count >= r.max)}
                           className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-lg font-bold active:bg-white/10 disabled:opacity-20">+</button>
                       </div>
                     </div>
@@ -282,60 +289,9 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
                 })}
               </div>
             )}
-
-            {/* Cartes bonus Voleur */}
-            {isMJ && thiefInGame && (
-              <div className="border-t border-blue-500/20 pt-4 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-blue-300 text-xs font-body uppercase tracking-wider">🃏 Cartes bonus Voleur</p>
-                    <p className="text-parchment-dim/60 text-xs font-body mt-0.5">Le Voleur choisira l'une de ces deux cartes</p>
-                  </div>
-                  <button onClick={() => setShowBonusEditor(e => !e)}
-                    className={`text-xs font-body border rounded-lg px-2 py-1 active:opacity-60 ${showBonusEditor ? 'border-blue-400/40 text-blue-300' : 'border-white/10 text-parchment-dim/50'}`}>
-                    {showBonusEditor ? '✓' : '✏️'}
-                  </button>
-                </div>
-
-                <div className="flex gap-3">
-                  {bonusCards.map((roleId, idx) => (
-                    <div key={idx} className="flex-1 flex flex-col items-center gap-2 card-dark border-blue-500/20 p-3 rounded-xl">
-                      <span className="text-2xl">{ROLE_EMOJI[roleId]}</span>
-                      <span className="text-parchment-dim text-xs font-body text-center">
-                        {BONUS_ROLES.find(r => r.id === roleId)?.label || roleId}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {showBonusEditor && (
-                  <div className="flex flex-col gap-4 animate-fade-up">
-                    {[0, 1].map(idx => (
-                      <div key={idx}>
-                        <p className="text-parchment-dim text-xs font-body mb-2">Carte bonus {idx + 1}</p>
-                        <div className="flex flex-wrap gap-2">
-                          {BONUS_ROLES.map(r => (
-                            <button key={r.id} onClick={() => setBonusCard(idx, r.id)}
-                              className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-body border transition-all active:scale-95 ${
-                                bonusCards[idx] === r.id
-                                  ? 'border-blue-400/60 bg-blue-900/20 text-blue-200'
-                                  : 'border-white/10 text-parchment-dim/60'
-                              }`}>
-                              <span>{ROLE_EMOJI[r.id]}</span>
-                              <span>{r.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
 
-        {/* Vue joueur lecture seule */}
         {!isMJ && composition && playerCount >= minPlayers && (
           <div className="card-dark p-4">
             <p className="text-parchment-dim text-xs uppercase tracking-wider font-body mb-3">Composition</p>
@@ -351,7 +307,6 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
           </div>
         )}
 
-        {/* Actions */}
         {isMJ ? (
           <div className="flex flex-col gap-3">
             {composition && !isValidComposition(composition, playerCount) && playerCount >= minPlayers && (
@@ -378,7 +333,7 @@ export function LobbyScreen({ game, currentPlayer, players = [], onPlayAgain }) 
                 <div className="flex gap-3">
                   <button onClick={deleteGame} disabled={deleting}
                     className="btn-danger flex-1 text-sm py-3 disabled:opacity-40">
-                    {deleting ? 'Suppression...' : '🗑 Confirmer'}
+                    {deleting ? '...' : '🗑 Confirmer'}
                   </button>
                   <button onClick={() => setConfirmDelete(false)} className="btn-ghost flex-1 text-sm py-3">Annuler</button>
                 </div>
